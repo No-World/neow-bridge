@@ -69,8 +69,8 @@ public final class Obs {
         o.addProperty("target_type", c.target.name().toLowerCase());
         o.addProperty("rarity", c.rarity.name());
         o.addProperty("color", c.color.name());
-        o.addProperty("damage", c.damage);
-        o.addProperty("block", c.block);
+        o.addProperty("damage", c.damage >= 0 ? c.damage : c.baseDamage);
+        o.addProperty("block", c.block >= 0 ? c.block : c.baseBlock);
         o.addProperty("magic_number", c.magicNumber);
         o.addProperty("exhaust", c.exhaust);
         o.addProperty("ethereal", c.isEthereal);
@@ -458,23 +458,23 @@ public final class Obs {
                 for (AbstractCampfireOption b : buttons) {
                     JsonObject opt = new JsonObject();
                     opt.addProperty("index", i++);
-                    String cls = Bridge.safeSimpleName(b.getClass());
-                    String name = cls.endsWith("Option") ? cls.substring(0, cls.length() - "Option".length()) : cls;
-                    name = name.toLowerCase();
+                    String cls = b.getClass().getSimpleName();
+                    String name = cls.equals("RestOption") ? "sleep"
+                            : (cls.endsWith("Option") ? cls.substring(0, cls.length() - "Option".length()) : cls).toLowerCase();
                     opt.addProperty("name", name);
                     opt.addProperty("usable", b.usable);
                     // 选项专有信息：候选牌列表顺序 = 随后 grid_select 的顺序（下标直接可用）
-                    if ("smith".equals(name) && b.usable) {
-                        opt.add("cards", cards(AbstractDungeon.player.masterDeck.getUpgradableCards().group));
-                    } else if ("toke".equals(name) && b.usable) {
-                        opt.add("cards", cards(CardGroup.getGroupWithoutBottledCards(
-                                AbstractDungeon.player.masterDeck.getPurgeableCards()).group));
-                    } else if ("sleep".equals(name) && b.usable) {
+                    if ("sleep".equals(name) && b.usable) {
                         int heal = (int) Math.floor(AbstractDungeon.player.maxHealth * 0.3);
                         if (AbstractDungeon.player.hasRelic("Regal Pillow")) {
                             heal += 15;
                         }
                         opt.addProperty("heal", heal);
+                    } else if ("smith".equals(name) && b.usable) {
+                        opt.add("cards", cards(AbstractDungeon.player.masterDeck.getUpgradableCards().group));
+                    } else if ("toke".equals(name) && b.usable) {
+                        opt.add("cards", cards(CardGroup.getGroupWithoutBottledCards(
+                                AbstractDungeon.player.masterDeck.getPurgeableCards()).group));
                     }
                     options.add(opt);
                 }

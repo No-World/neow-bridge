@@ -9,6 +9,7 @@ HOST, PORT = "127.0.0.1", 37771
 SEED = sys.argv[1] if len(sys.argv) > 1 else "PMCWKZEF"
 ASC = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 MAX_TRY = int(sys.argv[3]) if len(sys.argv) > 3 else 8
+CHAR = sys.argv[4] if len(sys.argv) > 4 else "IRONCLAD"
 
 def _connect():
     global s, f
@@ -156,7 +157,7 @@ def play_run(seed, asc, traj_path):
     if res and res["observation"]["screen"]["type"] == "game_over":
         rpc("step", action={"type": "proceed"}); time.sleep(2)
     for _ in range(10):
-        r = rpc("new_run", character="IRONCLAD", ascension=asc, seed=seed)
+        r = rpc("new_run", character=CHAR, ascension=asc, seed=seed)
         if r["ok"]: break
         time.sleep(4)
     else:

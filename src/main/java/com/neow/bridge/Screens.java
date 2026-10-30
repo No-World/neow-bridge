@@ -108,10 +108,10 @@ public final class Screens {
             return EVENT;
         }
         if (room instanceof TreasureRoomBoss || room instanceof TreasureRoom) {
-            return CHEST;
+            return room.phase == AbstractRoom.RoomPhase.COMPLETE ? COMPLETE : CHEST;
         }
         if (room instanceof ShopRoom) {
-            return SHOP_ROOM;
+            return SHOP_ROOM; // 商店房进门即 COMPLETE：不按 phase 判，恒为 SHOP_ROOM（进店/离开并存）
         }
         if (room instanceof RestRoom) {
             return room.phase == AbstractRoom.RoomPhase.COMPLETE ? COMPLETE : REST;

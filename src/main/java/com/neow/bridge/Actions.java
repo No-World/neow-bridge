@@ -516,7 +516,8 @@ public final class Actions {
 
     private static ArrayDeque<Runnable> proceed() throws InvalidActionException {
         String scr = Screens.current();
-        if (!Screens.COMPLETE.equals(scr) && !Screens.GAME_OVER.equals(scr)) {
+        if (!Screens.COMPLETE.equals(scr) && !Screens.GAME_OVER.equals(scr)
+                && !Screens.SHOP_ROOM.equals(scr)) {
             throw new InvalidActionException("proceed not legal on screen: " + scr);
         }
         ArrayDeque<Runnable> tasks = new ArrayDeque<Runnable>();

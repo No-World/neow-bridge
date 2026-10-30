@@ -189,6 +189,7 @@ public final class Legal {
             }
             case Screens.SHOP_ROOM:
                 out.add(act("shop_enter"));
+                out.add(act("proceed")); // 不进店直接走（游戏内同路径：商店房的前进按钮）
                 break;
             case Screens.EVENT:
             case Screens.GREMLIN_MATCH:
@@ -306,8 +307,10 @@ public final class Legal {
         return -1;
     }
 
+    /** 协议动作值（docs/protocol.md）：RestOption→sleep 等类名映射。 */
     static String restOptionName(com.megacrit.cardcrawl.ui.campfire.AbstractCampfireOption b) {
-        String cls = Bridge.safeSimpleName(b.getClass());
+        String cls = b.getClass().getSimpleName();
+        if (cls.equals("RestOption")) return "sleep";
         return (cls.endsWith("Option") ? cls.substring(0, cls.length() - "Option".length()) : cls).toLowerCase();
     }
 
