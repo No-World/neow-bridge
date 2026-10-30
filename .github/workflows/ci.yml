@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 校验 ModTheSpire.json
+        run: python -c "import json;json.load(open('src/main/resources/ModTheSpire.json'));print('ModTheSpire.json OK')"
+      - name: PROTOCOL.md 存在性
+        run: test -s PROTOCOL.md
+      # 完整 gradle 构建需要游戏本体 jar（Steam 私有资源），公开 runner 无法获取；
+      # 方案：自建 runner（装有游戏的机器）跑 packageMod 并上传 mod zip。
