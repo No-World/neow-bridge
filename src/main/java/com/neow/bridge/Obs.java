@@ -40,6 +40,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -112,6 +113,25 @@ public final class Obs {
         JsonObject o = new JsonObject();
         o.addProperty("count", group.size());
         o.add("cards", cards(sortedCopy(group.group, keepOrder)));
+        o.addProperty("order", keepOrder ? "true" : "hidden"); // true=真实顺序（仅对拍研究）
+        return o;
+    }
+
+    /** 可见顺序的牌堆（弃牌/消耗）：index 0 = 堆底（最先进入），末尾 = 堆顶（最新）。 */
+    static JsonObject pileChrono(com.megacrit.cardcrawl.cards.CardGroup group) {
+        JsonObject o = new JsonObject();
+        o.addProperty("count", group.size());
+        o.add("cards", cards(group.group)); // 原样输出，不脱序
+        o.addProperty("order", "chrono");
+        return o;
+    }
+
+    /** 无序集合（牌组）：按 id+升级数排序输出。 */
+    static JsonObject pileSortedDeck(com.megacrit.cardcrawl.cards.CardGroup group) {
+        JsonObject o = new JsonObject();
+        o.addProperty("count", group.size());
+        o.add("cards", cards(sortedCopy(group.group, false)));
+        o.addProperty("order", "sorted");
         return o;
     }
 
@@ -201,17 +221,18 @@ public final class Obs {
         JsonObject o = new JsonObject();
         ArrayList<ArrayList<MapRoomNode>> map = AbstractDungeon.map;
         MapRoomNode currNode = AbstractDungeon.getCurrMapNode();
+        // 第一趟：为所有节点分配平铺下标（边指向更高行，必须先全部编号再转换）
         Map<String, Integer> indexOf = new HashMap<String, Integer>();
-        JsonArray nodes = new JsonArray();
         int idx = 0;
         for (ArrayList<MapRoomNode> row : map) {
             for (MapRoomNode node : row) {
-                indexOf.put(node.x + "," + node.y, idx);
-                idx++;
-                boolean isCurrent = currNode != null && currNode.x == node.x && currNode.y == node.y;
-                if (!node.hasEdges() && !isCurrent) {
-                    continue; // 不输出无出边的占位节点（当前节点除外）
-                }
+                indexOf.put(node.x + "," + node.y, idx++);
+            }
+        }
+        // 第二趟：输出全部节点与边（无损全图拓扑；客户端自行过滤不可达点）
+        JsonArray nodes = new JsonArray();
+        for (ArrayList<MapRoomNode> row : map) {
+            for (MapRoomNode node : row) {
                 JsonObject n = new JsonObject();
                 n.addProperty("index", indexOf.get(node.x + "," + node.y));
                 n.addProperty("x", node.x);
@@ -233,8 +254,17 @@ public final class Obs {
         o.add("nodes", nodes);
         o.add("current", currNode != null && indexOf.containsKey(currNode.x + "," + currNode.y)
                 ? new JsonPrimitive(indexOf.get(currNode.x + "," + currNode.y)) : JsonNull.INSTANCE);
+        if (currNode != null) {
+            o.addProperty("current_x", currNode.x);
+            o.addProperty("current_y", currNode.y);
+        }
         o.addProperty("first_room_chosen", AbstractDungeon.firstRoomChosen);
         o.addProperty("boss_door", Screens.bossDoorAvailable());
+        JsonArray choices = new JsonArray();
+        for (MapRoomNode n : Screens.mapChoices()) {
+            choices.add(new JsonPrimitive(indexOf.get(n.x + "," + n.y)));
+        }
+        o.add("choices", choices);
         return o;
     }
 
@@ -588,7 +618,7 @@ public final class Obs {
         player.addProperty("hp", p.currentHealth);
         player.addProperty("max_hp", p.maxHealth);
         player.addProperty("block", p.currentBlock);
-        player.addProperty("energy", p.energy.energy);
+        player.addProperty("energy", com.megacrit.cardcrawl.ui.panels.EnergyPanel.totalCount);
         player.addProperty("energy_cap", p.energy.energyMaster);
         player.addProperty("gold", p.gold);
         player.addProperty("potion_slots", p.potionSlots);
@@ -615,11 +645,11 @@ public final class Obs {
         player.addProperty("stance", p.stance != null ? p.stance.ID : "None");
         o.add("player", player);
 
-        o.add("hand", cards(p.hand.group));
+        o.add("hand", cards(p.hand.group)); // 手牌：数组顺序即显示序，card_index 直接引用
         o.add("draw_pile", pileSorted(p.drawPile, cfg.cheatDrawOrder));
-        o.add("discard_pile", cards(p.discardPile.group));
-        o.add("exhaust_pile", cards(p.exhaustPile.group));
-        o.add("master_deck", cards(sortedCopy(p.masterDeck.group, false)));
+        o.add("discard_pile", pileChrono(p.discardPile));
+        o.add("exhaust_pile", pileChrono(p.exhaustPile));
+        o.add("master_deck", pileSortedDeck(p.masterDeck));
         if (p.cardInUse != null) {
             o.add("card_in_use", card(p.cardInUse));
         }

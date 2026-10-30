@@ -3,6 +3,7 @@ package com.neow.bridge.patch;
 import basemod.ReflectionHacks;
 import com.evacipated.cardcrawl.modthespire.lib.LineFinder;
 import com.evacipated.cardcrawl.modthespire.lib.Matcher;
+import com.evacipated.cardcrawl.modthespire.lib.SpireInsertLocator;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInsertPatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpirePatch;
 import com.evacipated.cardcrawl.modthespire.patcher.PatchingException;
@@ -268,19 +269,19 @@ public final class HoverPatches {
         public static String bodyText = "";
 
         @SpirePatch(clz = com.megacrit.cardcrawl.events.RoomEventDialog.class, method = "updateBodyText",
-                paramtypez = {String.class, com.megacrit.cardcrawl.events.DialogWord.AppearEffect.class})
+                paramtypez = {String.class, com.megacrit.cardcrawl.ui.DialogWord.AppearEffect.class})
         public static class RoomPatch {
             public static void Prefix(com.megacrit.cardcrawl.events.RoomEventDialog _instance, String text,
-                                      com.megacrit.cardcrawl.events.DialogWord.AppearEffect ae) {
+                                      com.megacrit.cardcrawl.ui.DialogWord.AppearEffect ae) {
                 bodyText = text;
             }
         }
 
         @SpirePatch(clz = com.megacrit.cardcrawl.events.GenericEventDialog.class, method = "updateBodyText",
-                paramtypez = {String.class, com.megacrit.cardcrawl.events.DialogWord.AppearEffect.class})
+                paramtypez = {String.class, com.megacrit.cardcrawl.ui.DialogWord.AppearEffect.class})
         public static class ImagePatch {
             public static void Prefix(com.megacrit.cardcrawl.events.GenericEventDialog _instance, String text,
-                                      com.megacrit.cardcrawl.events.DialogWord.AppearEffect ae) {
+                                      com.megacrit.cardcrawl.ui.DialogWord.AppearEffect ae) {
                 bodyText = text;
             }
         }

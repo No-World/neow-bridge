@@ -2,12 +2,15 @@ package com.neow.bridge;
 
 import com.megacrit.cardcrawl.actions.GameActionManager;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
+import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
+import com.megacrit.cardcrawl.neow.NeowEvent;
 import com.megacrit.cardcrawl.rooms.EventRoom;
-import com.megacrit.cardcrawl.rooms.NeowRoom;
 import com.megacrit.cardcrawl.rooms.VictoryRoom;
+
+import java.util.ArrayList;
 
 /**
  * 状态稳定判定：step 之后等待游戏"落定"到下一个决策点。
@@ -102,15 +105,37 @@ public final class Stability {
         }
         AbstractRoom room = AbstractDungeon.getCurrRoom();
         // 事件房间：等事件自身动画
-        if ((room instanceof EventRoom || room instanceof NeowRoom
+        if ((room instanceof EventRoom
+                || (room.event != null && room.event instanceof NeowEvent)
                 || (room instanceof VictoryRoom && ((VictoryRoom) room).eType == VictoryRoom.EventType.HEART))
                 && room.event != null && room.event.waitTimer != 0.0f) {
             return false;
         }
         if (room.phase == AbstractRoom.RoomPhase.COMBAT) {
             GameActionManager am = AbstractDungeon.actionManager;
+            if (AbstractDungeon.isScreenUp) {
+                // 决策屏：等待玩家输入即静止。即便动作仍在队列中（如回合末弃牌的
+                // DiscardAtEndOfTurnAction 会停在队列里等屏关闭），也必须视为可决策。
+                // 例外：FAST_HAND_CONF 单选屏会在 0.25s 后自动确认关闭，不算静止。
+                if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.HAND_SELECT
+                        && AbstractDungeon.handCardSelectScreen != null) {
+                    com.megacrit.cardcrawl.screens.select.HandCardSelectScreen hs =
+                            AbstractDungeon.handCardSelectScreen;
+                    boolean anyNumber = (Boolean) basemod.ReflectionHacks.getPrivate(hs,
+                            com.megacrit.cardcrawl.screens.select.HandCardSelectScreen.class, "anyNumber");
+                    if (Settings.FAST_HAND_CONF && !anyNumber && !hs.canPickZero
+                            && hs.numCardsToSelect == 1) {
+                        return false; // 将自动确认，等它自己关
+                    }
+                }
+                return true;
+            }
             if (am.phase != GameActionManager.Phase.WAITING_ON_USER) {
                 return false;
+            }
+            if (AbstractDungeon.overlayMenu != null
+                    && !AbstractDungeon.overlayMenu.endTurnButton.enabled) {
+                return false; // 同上：入场/敌人回合未结束（屏幕拉起前的过场也在此拦截）
             }
             if (!am.actions.isEmpty() || !am.preTurnActions.isEmpty()
                     || !am.cardQueue.isEmpty() || !am.monsterQueue.isEmpty() || am.currentAction != null) {
@@ -119,21 +144,36 @@ public final class Stability {
             if (AbstractDungeon.player != null && AbstractDungeon.player.isEndingTurn) {
                 return false;
             }
+            // 玩家回合硬信号：结束回合按钮仅在开场抽牌/回合开始动作链完成后 enable。
+            // 若未 enable，说明入场流程（抽起始手牌、滚动意图）或敌人回合尚未结束。
+            if (AbstractDungeon.overlayMenu != null
+                    && !AbstractDungeon.overlayMenu.endTurnButton.enabled) {
+                return false;
+            }
             if (room.isBattleOver) {
                 return false; // 战斗收尾计时/开奖励过渡中
             }
             if (room.monsters != null && room.monsters.areMonstersBasicallyDead()) {
                 return false;
             }
-            if (!AbstractDungeon.isScreenUp) {
-                return true;
-            }
+            return true;
         }
         // 遗物飞行/装备动画
         if (AbstractDungeon.player != null) {
             for (AbstractRelic r : AbstractDungeon.player.relics) {
                 if (!r.isDone) {
                     return false;
+                }
+            }
+        }
+        // 地图节点点击后的 0.25s 动画等待期（结束时才 nextRoomTransitionStart）
+        if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.MAP && AbstractDungeon.map != null) {
+            for (ArrayList<com.megacrit.cardcrawl.map.MapRoomNode> row : AbstractDungeon.map) {
+                for (com.megacrit.cardcrawl.map.MapRoomNode node : row) {
+                    if ((Float) basemod.ReflectionHacks.getPrivate(node,
+                            com.megacrit.cardcrawl.map.MapRoomNode.class, "animWaitTimer") != 0.0f) {
+                        return false;
+                    }
                 }
             }
         }

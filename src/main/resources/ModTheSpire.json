@@ -2,9 +2,9 @@
   "modid": "neow-bridge",
   "name": "NeowBridge",
   "author": "No-World",
-  "description": "Observation/control bridge for the Neow AI project (unified gym protocol). Fork of CommunicationMod approach.",
-  "version": "0.1.0",
-  "sts_version": "Slay the Spire (check in game)",
+  "description": "Exposes the full game as an external API via the Neow unified gym protocol (docs/protocol.md). Approach forked from CommunicationMod.",
+  "version": "0.2.0",
+  "sts_version": "12-20-2022",
   "mts_version": "3.30.0",
   "dependencies": ["basemod"]
 }
