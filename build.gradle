@@ -1,0 +1,31 @@
+// NeowBridge —— STS 模组构建
+// 前置：在 gradle.properties 中指定 STS 安装目录，例如：
+//   stsDir=D:/SteamLibrary/steamapps/common/SlayTheSpire
+plugins {
+    id 'java'
+}
+
+group 'com.neow'
+version '0.1.0'
+
+// STS 目标 Java 版本（按当前游戏自带 JRE 调整，历史上为 8）
+java.sourceCompatibility = JavaVersion.VERSION_1_8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 游戏本体与模组加载器（本地 jar，路径依赖本机 Steam 安装）
+    // compileOnly files("${stsDir}/desktop-1.0.jar")
+    // compileOnly files("${stsDir}/mods/ModTheSpire.jar")
+    // compileOnly files("${stsDir}/mods/BaseMod.jar")
+    // fork 参考：CommunicationMod（github.com/ForgottenArbiter/CommunicationMod）
+}
+
+tasks.register('packageMod', Zip) {
+    archiveFileName = "NeowBridge-${version}.zip"
+    destinationDirectory = file('build/mod')
+    from('src/main/resources')
+    // from(tasks.jar)  // 解除依赖注释后启用
+}
