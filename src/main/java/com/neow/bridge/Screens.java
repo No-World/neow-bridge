@@ -59,6 +59,14 @@ public final class Screens {
     }
 
     public static String current() {
+        try {
+            return currentUnsafe();
+        } catch (Throwable t) {
+            return TRANSIT; // 幕切换等半初始化状态
+        }
+    }
+
+    private static String currentUnsafe() {
         if (!inDungeon()) {
             return MENU;
         }

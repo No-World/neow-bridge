@@ -22,7 +22,7 @@ fi
 [[ -f "$RT/ModTheSpire.jar" ]] || { echo "runtime 未就绪，先运行 scripts/make_runtime.sh" >&2; exit 1; }
 
 EXTRA=""
-[[ "${NEOW_BRIDGE_VISIBLE:-0}" == "1" ]] && EXTRA="-Visible"
+[[ "${NEOW_BRIDGE_HIDDEN:-0}" == "1" ]] && EXTRA="-Hidden"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w "$ROOT/scripts/launch.ps1")" \
   -RtDir "$(wslpath -w "$RT")" \
   -JavaExe "$(wslpath -w "$STS_DIR/jre/bin/java.exe")" \

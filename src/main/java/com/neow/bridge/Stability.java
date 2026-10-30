@@ -8,6 +8,7 @@ import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.neow.NeowEvent;
 import com.megacrit.cardcrawl.rooms.EventRoom;
+import com.megacrit.cardcrawl.rooms.RestRoom;
 import com.megacrit.cardcrawl.rooms.VictoryRoom;
 
 import java.util.ArrayList;
@@ -26,8 +27,17 @@ public final class Stability {
     private Stability() {
     }
 
-    /** 廉价状态指纹：任何会随结算推进而变化的量的杂糅。 */
+    /** 廉价状态指纹：任何会随结算推进而变化的量的杂糅。过渡态（幕切换等）内部状态半初始化，
+     *  全体 try/catch 防护——指纹异常时返回常量（视为未稳定）。 */
     public static long fingerprint() {
+        try {
+            return fingerprintUnsafe();
+        } catch (Throwable t) {
+            return -1L;
+        }
+    }
+
+    private static long fingerprintUnsafe() {
         long h = 17;
         h = h * 31 + (CardCrawlGame.mode != null ? CardCrawlGame.mode.ordinal() : -1);
         if (AbstractDungeon.isPlayerInDungeon() && AbstractDungeon.getCurrRoom() != null) {
@@ -92,8 +102,17 @@ public final class Stability {
 
     /**
      * 硬条件：当前帧是否处于"可决策/可汇报"的静止态。
+     * 过渡态内部可能抛异常（幕切换时 dungeon 半初始化），一律视为未静止。
      */
     public static boolean quiescent() {
+        try {
+            return quiescentUnsafe();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static boolean quiescentUnsafe() {
         if (CardCrawlGame.mode != CardCrawlGame.GameMode.GAMEPLAY) {
             return true; // 菜单/角色选择——由上层判断是否目标态
         }
@@ -157,6 +176,16 @@ public final class Stability {
                 return false;
             }
             return true;
+        }
+        // 休息处：选中选项且后续屏（网格等）尚未弹出=演出期，不算静止；
+        // 层一旦弹出（isScreenUp）即决策点（smith 的特效计时被屏冻结，属游戏机制）。
+        if (AbstractDungeon.getCurrRoom() instanceof RestRoom
+                && AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.INCOMPLETE
+                && !AbstractDungeon.isScreenUp) {
+            RestRoom rest = (RestRoom) AbstractDungeon.getCurrRoom();
+            if (rest.campfireUI != null && rest.campfireUI.somethingSelected) {
+                return false;
+            }
         }
         // 遗物飞行/装备动画
         if (AbstractDungeon.player != null) {

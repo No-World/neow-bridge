@@ -1,6 +1,7 @@
 package com.neow.bridge;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.logging.log4j.LogManager;
@@ -91,6 +92,44 @@ public final class Server {
                     continue;
                 }
                 long timeoutMs = Bridge.CFG.timeoutMs + 5_000;
+                // ping 在忙时代答（服务器线程），保证卡死时也有透视
+                String cmd0 = Actions.str(request, "cmd");
+                // diag：线程栈转储，服务器线程直接代答（游戏线程卡死时也能用）
+                if ("diag".equals(cmd0)) {
+                    JsonObject resp = new JsonObject();
+                    resp.addProperty("id", request.has("id") ? request.get("id").getAsInt() : 0);
+                    resp.addProperty("ok", true);
+                    JsonObject r = new JsonObject();
+                    r.addProperty("bridge_state", Bridge.diagState());
+                    for (java.util.Map.Entry<Thread, StackTraceElement[]> e : Thread.getAllStackTraces().entrySet()) {
+                        String tn = e.getKey().getName();
+                        if (!(tn.equals("LWJGL Application") || tn.equals("main") || tn.contains("Sound") || tn.contains("Music"))) {
+                            continue;
+                        }
+                        JsonArray fr = new JsonArray();
+                        StackTraceElement[] st = e.getValue();
+                        for (int k = Math.max(0, st.length - 30); k < st.length; k++) {
+                            fr.add(new com.google.gson.JsonPrimitive(st[k].toString()));
+                        }
+                        r.add("thread[" + tn + "]", fr);
+                    }
+                    resp.add("result", r);
+                    write(out, client, resp);
+                    continue;
+                }
+                if ("ping".equals(cmd0) && Bridge.busy()) {
+                    JsonObject resp = new JsonObject();
+                    resp.addProperty("id", request.has("id") ? request.get("id").getAsInt() : 0);
+                    resp.addProperty("ok", true);
+                    JsonObject r = new JsonObject();
+                    r.addProperty("busy", true);
+                    r.addProperty("protocol_version", Bridge.PROTOCOL_VERSION);
+                    r.addProperty("bridge_version", Bridge.BRIDGE_VERSION);
+                    r.addProperty("bridge_state", Bridge.diagState());
+                    resp.add("result", r);
+                    write(out, client, resp);
+                    continue;
+                }
                 JsonObject response = Bridge.submit(request, timeoutMs);
                 write(out, client, response);
                 if ("kill_game".equals(Actions.str(request, "cmd"))) {

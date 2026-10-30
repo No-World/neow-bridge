@@ -1,7 +1,10 @@
 package com.neow.bridge;
 
 import com.google.gson.JsonObject;
+import com.megacrit.cardcrawl.actions.GameActionManager;
 import com.megacrit.cardcrawl.core.Settings;
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
+import com.megacrit.cardcrawl.rooms.RestRoom;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -25,6 +28,10 @@ public final class Bridge {
     public static final String BRIDGE_VERSION = "0.2.0";
 
     private static final Logger logger = LogManager.getLogger(Bridge.class.getName());
+
+    /** 心跳：每帧 +1，供服务器线程判断钩子链是否存活。 */
+    public static volatile long heartbeat = 0;
+    public static volatile long heartbeatLastNanos = 0;
 
     /** 运行配置（可经 config 命令修改）。 */
     public static final class Config {
@@ -60,8 +67,28 @@ public final class Bridge {
     private Bridge() {
     }
 
+
+    /** 安全的类短名：绝不走 getSimpleName（其 enclosing 查询会与惰性类加载在 JVM 内部死锁）。 */
+    static String safeSimpleName(Class<?> c) {
+        String n = c.getName();
+        int dot = n.lastIndexOf('.');
+        if (dot >= 0) n = n.substring(dot + 1);
+        int d = n.lastIndexOf('$');
+        if (d >= 0) n = n.substring(d + 1);
+        return n.isEmpty() ? "anonymous" : n;
+    }
+
     public static boolean busy() {
         return PENDING.get() != null;
+    }
+
+    /** 诊断透视：服务器线程可直接读（不依赖游戏线程）。 */
+    public static String diagState() {
+        Pending p = PENDING.get();
+        return "{\"state\":\"" + state + "\",\"tasks\":" + tasks.size()
+                + ",\"pending\":\"" + (p != null ? Actions.str(p.request, "cmd") : null)
+                + "\",\"deadline_ms_left\":" + (p != null ? Math.max(0, p.deadline - System.currentTimeMillis()) : -1)
+                + ",\"frames_since_task\":" + framesSinceTask + "\"}";
     }
 
     /** 外部线程：提交请求并等待结果。 */
@@ -100,6 +127,8 @@ public final class Bridge {
 
     /** PreUpdate：编译并逐帧执行任务。 */
     public static void onPreUpdate() {
+        heartbeat++;
+        heartbeatLastNanos = System.nanoTime();
         if (CFG.fastMode) {
             Settings.FAST_MODE = true;
         }
@@ -144,13 +173,59 @@ public final class Bridge {
         }
     }
 
-    /** PostUpdate：落定检查与响应构建。 */
+    /** PostUpdate：落定检查与响应构建。绝不让异常漏进渲染循环。 */
     public static void onPostUpdate() {
         Pending p = PENDING.get();
         if (p == null || state != State.SETTLING) {
             return;
         }
+        try {
+            settleFrame(p);
+        } catch (Throwable t) {
+            logger.error("settle frame failed", t);
+            resetSettle();
+        }
+    }
+
+    /** 落定超时的现场快照。 */
+    private static String diagnostics() {
+        StringBuilder sb = new StringBuilder("{");
+        try {
+            sb.append("\"screen\":\"").append(AbstractDungeon.screen).append("\"");
+            sb.append(",\"screenUp\":").append(AbstractDungeon.isScreenUp);
+            sb.append(",\"fading\":").append(AbstractDungeon.isFadingOut).append('/').append(AbstractDungeon.isFadingIn);
+            if (AbstractDungeon.isPlayerInDungeon()) {
+                com.megacrit.cardcrawl.rooms.AbstractRoom room = AbstractDungeon.getCurrRoom();
+                sb.append(",\"room\":\"").append(Bridge.safeSimpleName(room.getClass())).append("\"");
+                sb.append(",\"phase\":\"").append(room.phase).append("\"");
+                GameActionManager am = AbstractDungeon.actionManager;
+                sb.append(",\"amPhase\":\"").append(am.phase).append("\"");
+                sb.append(",\"acts\":").append(am.actions.size())
+                        .append('/').append(am.preTurnActions.size())
+                        .append('/').append(am.cardQueue.size())
+                        .append('/').append(am.monsterQueue.size())
+                        .append(",\"cur\":").append(am.currentAction != null);
+                if (room instanceof RestRoom) {
+                    sb.append(",\"rest.sel\":").append(((RestRoom) room).campfireUI.somethingSelected);
+                    sb.append(",\"rest.hidden\":").append(com.megacrit.cardcrawl.rooms.CampfireUI.hidden);
+                }
+                if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.GRID) {
+                    sb.append(",\"grid.sel\":").append(AbstractDungeon.gridSelectScreen.selectedCards.size())
+                            .append(",\"grid.confirm\":").append(AbstractDungeon.gridSelectScreen.confirmScreenUp)
+                            .append(",\"grid.target\":").append(AbstractDungeon.gridSelectScreen.targetGroup != null
+                                    ? AbstractDungeon.gridSelectScreen.targetGroup.size() : -1);
+                }
+                sb.append(",\"endTurnBtn\":").append(AbstractDungeon.overlayMenu.endTurnButton.enabled);
+            }
+        } catch (Throwable t) {
+            sb.append(",\"err\":\"").append(t).append("\"");
+        }
+        return sb.append('}').toString();
+    }
+
+    private static void settleFrame(Pending p) {
         if (System.currentTimeMillis() > p.deadline) {
+            logger.error("SETTLE-TIMEOUT diag: " + diagnostics());
             fail(p, "timeout", "settle timeout on screen: " + Screens.current());
             return;
         }

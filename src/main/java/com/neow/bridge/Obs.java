@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.megacrit.cardcrawl.actions.GameActionManager;
 import com.megacrit.cardcrawl.cards.AbstractCard;
+import com.megacrit.cardcrawl.cards.CardGroup;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
@@ -74,6 +75,7 @@ public final class Obs {
         o.addProperty("exhaust", c.exhaust);
         o.addProperty("ethereal", c.isEthereal);
         o.addProperty("innate", c.isInnate);
+        o.addProperty("can_upgrade", c.canUpgrade());
         if (c.misc != 0) {
             o.addProperty("misc", c.misc);
         }
@@ -428,7 +430,7 @@ public final class Obs {
                 AbstractEvent event = room.event;
                 o.addProperty("id", eventId(event));
                 Object name = ReflectionHacks.getPrivateStatic(event.getClass(), "NAME");
-                o.addProperty("name", name != null ? name.toString() : event.getClass().getSimpleName());
+                o.addProperty("name", name != null ? name.toString() : Bridge.safeSimpleName(event.getClass()));
                 o.addProperty("body_text", stripFormatting(HoverPatches.EventBodyText.bodyText));
                 JsonArray options = new JsonArray();
                 ArrayList<LargeDialogOptionButton> buttons = eventButtons();
@@ -456,10 +458,24 @@ public final class Obs {
                 for (AbstractCampfireOption b : buttons) {
                     JsonObject opt = new JsonObject();
                     opt.addProperty("index", i++);
-                    String cls = b.getClass().getSimpleName();
+                    String cls = Bridge.safeSimpleName(b.getClass());
                     String name = cls.endsWith("Option") ? cls.substring(0, cls.length() - "Option".length()) : cls;
-                    opt.addProperty("name", name.toLowerCase());
+                    name = name.toLowerCase();
+                    opt.addProperty("name", name);
                     opt.addProperty("usable", b.usable);
+                    // 选项专有信息：候选牌列表顺序 = 随后 grid_select 的顺序（下标直接可用）
+                    if ("smith".equals(name) && b.usable) {
+                        opt.add("cards", cards(AbstractDungeon.player.masterDeck.getUpgradableCards().group));
+                    } else if ("toke".equals(name) && b.usable) {
+                        opt.add("cards", cards(CardGroup.getGroupWithoutBottledCards(
+                                AbstractDungeon.player.masterDeck.getPurgeableCards()).group));
+                    } else if ("sleep".equals(name) && b.usable) {
+                        int heal = (int) Math.floor(AbstractDungeon.player.maxHealth * 0.3);
+                        if (AbstractDungeon.player.hasRelic("Regal Pillow")) {
+                            heal += 15;
+                        }
+                        opt.addProperty("heal", heal);
+                    }
                     options.add(opt);
                 }
                 o.add("options", options);
@@ -530,7 +546,7 @@ public final class Obs {
             f.setAccessible(true);
             return (String) f.get(null);
         } catch (Exception e) {
-            return event.getClass().getSimpleName();
+            return Bridge.safeSimpleName(event.getClass());
         }
     }
 

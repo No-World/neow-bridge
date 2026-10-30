@@ -220,6 +220,11 @@ public final class Legal {
                 break;
             }
             case Screens.REST: {
+                com.megacrit.cardcrawl.rooms.RestRoom restRoom =
+                        (com.megacrit.cardcrawl.rooms.RestRoom) AbstractDungeon.getCurrRoom();
+                if (restRoom.campfireUI == null || restRoom.campfireUI.somethingSelected) {
+                    break; // 演出中：不提供任何休息选项
+                }
                 int i = 0;
                 for (com.megacrit.cardcrawl.ui.campfire.AbstractCampfireOption b : ObsScreen.restButtons()) {
                     if (b.usable) {
@@ -302,7 +307,7 @@ public final class Legal {
     }
 
     static String restOptionName(com.megacrit.cardcrawl.ui.campfire.AbstractCampfireOption b) {
-        String cls = b.getClass().getSimpleName();
+        String cls = Bridge.safeSimpleName(b.getClass());
         return (cls.endsWith("Option") ? cls.substring(0, cls.length() - "Option".length()) : cls).toLowerCase();
     }
 

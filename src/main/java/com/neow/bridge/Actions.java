@@ -691,8 +691,8 @@ public final class Actions {
                 throw new InvalidActionException(what + " indices must be integers");
             }
             int i = el.getAsInt();
-            if (i < 0 || (bound > 0 && i >= bound)) {
-                throw new InvalidActionException(what + " index out of bounds: " + i);
+            if (i < 0 || (bound >= 0 && i >= bound)) {
+                throw new InvalidActionException(what + " index out of bounds: " + i + " (bound=" + bound + ")");
             }
             if (!out.add(i)) {
                 throw new InvalidActionException(what + " duplicate index: " + i);

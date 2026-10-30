@@ -66,6 +66,7 @@ public final class Commands {
             result.addProperty("bridge_version", Bridge.BRIDGE_VERSION);
             result.addProperty("in_dungeon", Screens.inDungeon());
             result.addProperty("screen", Screens.current());
+            result.addProperty("bridge_state", Bridge.diagState());
             // 启动诊断：主菜单未就绪时看卡在哪
             result.addProperty("mode", String.valueOf(com.megacrit.cardcrawl.core.CardCrawlGame.mode));
             result.addProperty("main_menu_built", com.megacrit.cardcrawl.core.CardCrawlGame.mainMenuScreen != null);
@@ -115,7 +116,7 @@ public final class Commands {
         info.addProperty("screen", Screens.current());
         info.addProperty("in_dungeon", inDungeon);
         if (inDungeon) {
-            info.addProperty("room", AbstractDungeon.getCurrRoom().getClass().getSimpleName());
+            info.addProperty("room", Bridge.safeSimpleName(AbstractDungeon.getCurrRoom().getClass()));
             info.addProperty("act", AbstractDungeon.actNum);
             info.addProperty("floor", AbstractDungeon.floorNum);
         }

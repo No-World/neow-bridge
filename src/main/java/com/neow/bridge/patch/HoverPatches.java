@@ -47,6 +47,43 @@ public final class HoverPatches {
     }
 
     // ------------------------------------------------------------------
+    // 无音频模式（自动化默认）：本机 OpenAL 设备破占时，音乐/音效原生调用会阻塞
+    // 渲染线程数十秒（闪屏冻结/宝箱房卡死均源于此）。NEOW_BRIDGE_AUDIO=1 可保留音频。
+    // 挂在 LwjglApplicationConfiguration 构造后（早于 LwjglApplication 读取该配置）。
+    // ------------------------------------------------------------------
+    @SpirePatch(clz = com.badlogic.gdx.backends.lwjgl.LwjglApplication.class,
+            method = SpirePatch.CONSTRUCTOR,
+            paramtypez = {com.badlogic.gdx.ApplicationListener.class,
+                    com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration.class})
+    public static class DisableAudioCtorPatch {
+        public static void Prefix(com.badlogic.gdx.backends.lwjgl.LwjglApplication __instance,
+                                 com.badlogic.gdx.ApplicationListener listener,
+                                 com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration config) {
+            if (!"1".equals(System.getenv("NEOW_BRIDGE_AUDIO"))) {
+                config.disableAudio = true; // 音频初始化发生在构造器体内，此前置位即可跳过
+                System.out.println("[NeowBridge] audio disabled (LwjglApplication ctor prefix)");
+            }
+            config.backgroundFPS = 60; // 窗口最小化/不可见时仍渲染（libgdx 默认 -1=停渲染，会冻结桥的钩子链）
+            config.foregroundFPS = 60;   // 显式软件限帧（0=vSync：失焦时 Display.update 会被合成器阻塞，
+                                         //   诱发 CardCrawlGame.render 的 delta>0.1 丢帧保护 → 逻辑永久冻结）
+            config.vSyncEnabled = false;
+            config.forceExit = false;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 钳制帧间隔：CardCrawlGame.render 开头 `if (getRawDeltaTime() > 0.1f) return;`
+    // 会在慢帧时丢弃整帧（连 update 都不跑）。失焦/vSync 卡顿下会永久冻结逻辑。
+    // 此处把报告的 delta 钳到 0.099s，丢帧保护永不触发，钩子链永在。
+    // ------------------------------------------------------------------
+    @SpirePatch(clz = com.badlogic.gdx.backends.lwjgl.LwjglGraphics.class, method = "getRawDeltaTime")
+    public static class ClampDeltaPatch {
+        public static float Postfix(float res) {
+            return res > 0.099f ? 0.099f : res;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // 卡牌奖励屏：hover + 点击指定卡
     // ------------------------------------------------------------------
     public static class CardRewardHover {
