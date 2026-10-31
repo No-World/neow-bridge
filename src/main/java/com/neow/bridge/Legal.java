@@ -263,6 +263,7 @@ public final class Legal {
             case Screens.CHEST:
                 if (!ObsScreen.chestOpened()) {
                     out.add(act("chest_open"));
+                    out.add(act("proceed")); // 玩家可以不开箱直接走
                 }
                 break;
             case Screens.BOSS_RELIC: {
@@ -274,6 +275,7 @@ public final class Legal {
                     out.add(a);
                     i++;
                 }
+                out.add(act("cancel")); // 玩家可以跳过交换保留原遗物
                 break;
             }
             case Screens.COMPLETE:

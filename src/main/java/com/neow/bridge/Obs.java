@@ -505,15 +505,31 @@ public final class Obs {
                 break;
             }
             case Screens.CHEST: {
+                // 奖励进房时已 roll（AbstractChest 构造器 randomizeReward；BossChest 构造时 roll 3 遗物），
+                // 前置到观测零 RNG 代价，开不开箱的决策信息完备
                 boolean boss = room instanceof TreasureRoomBoss;
-                boolean open;
-                if (boss) {
-                    open = ((TreasureRoomBoss) room).chest.isOpen;
-                } else {
-                    open = ((TreasureRoom) room).chest.isOpen;
-                }
+                com.megacrit.cardcrawl.rewards.chests.AbstractChest chest = boss
+                        ? ((TreasureRoomBoss) room).chest : ((TreasureRoom) room).chest;
                 o.addProperty("boss", boss);
-                o.addProperty("opened", open);
+                o.addProperty("opened", chest.isOpen);
+                String ctype = chest instanceof com.megacrit.cardcrawl.rewards.chests.SmallChest ? "small"
+                        : chest instanceof com.megacrit.cardcrawl.rewards.chests.MediumChest ? "medium"
+                        : chest instanceof com.megacrit.cardcrawl.rewards.chests.LargeChest ? "large" : "boss";
+                o.addProperty("chest_type", ctype);
+                JsonObject contents = new JsonObject();
+                if (chest instanceof com.megacrit.cardcrawl.rewards.chests.BossChest) {
+                    JsonArray arr = new JsonArray();
+                    for (AbstractRelic r : ((com.megacrit.cardcrawl.rewards.chests.BossChest) chest).relics) {
+                        arr.add(new com.google.gson.JsonPrimitive(r.relicId));
+                    }
+                    contents.add("relics", arr);
+                    contents.addProperty("choose", 3);
+                } else {
+                    contents.addProperty("gold", chest.goldReward);
+                    contents.addProperty("gold_base", chest.GOLD_AMT);
+                    contents.addProperty("relic_tier", chest.relicReward.name().replace("_RELIC", "").toLowerCase());
+                }
+                o.add("contents", contents);
                 break;
             }
             case Screens.BOSS_RELIC: {

@@ -580,8 +580,11 @@ public final class Actions {
     private static ArrayDeque<Runnable> proceed() throws InvalidActionException {
         String scr = Screens.current();
         if (!Screens.COMPLETE.equals(scr) && !Screens.GAME_OVER.equals(scr)
-                && !Screens.SHOP_ROOM.equals(scr)) {
+                && !Screens.SHOP_ROOM.equals(scr) && !Screens.CHEST.equals(scr)) {
             throw new InvalidActionException("proceed not legal on screen: " + scr);
+        }
+        if (Screens.CHEST.equals(scr) && Legal.ObsScreen.chestOpened()) {
+            throw new InvalidActionException("chest already opened");
         }
         ArrayDeque<Runnable> tasks = new ArrayDeque<Runnable>();
         if (Screens.GAME_OVER.equals(scr)) {
@@ -619,6 +622,14 @@ public final class Actions {
                     throw new InvalidActionException("grid cancel not available");
                 }
                 tasks.add(() -> AbstractDungeon.overlayMenu.cancelButton.hb.clicked = true);
+                return tasks;
+            case Screens.BOSS_RELIC:
+                // 跳过 Boss 遗物交换（保留原遗物）
+                tasks.add(() -> {
+                    Object btn = ReflectionHacks.getPrivate(AbstractDungeon.bossRelicScreen,
+                            com.megacrit.cardcrawl.screens.select.BossRelicSelectScreen.class, "cancelButton");
+                    ((com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton) btn).hb.clicked = true;
+                });
                 return tasks;
             default:
                 throw new InvalidActionException("cancel not legal on screen: " + scr);
