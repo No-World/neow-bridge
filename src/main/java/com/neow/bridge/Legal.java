@@ -46,6 +46,8 @@ public final class Legal {
                             if (c.canUse(AbstractDungeon.player, mo)) {
                                 JsonObject a = act("play");
                                 a.addProperty("card_index", i);
+                                a.addProperty("card_id", c.cardID);
+                                a.addProperty("uuid", c.uuid.toString());
                                 a.addProperty("target", m);
                                 out.add(a);
                             }
@@ -53,6 +55,8 @@ public final class Legal {
                     } else if (c.canUse(AbstractDungeon.player, null)) {
                         JsonObject a = act("play");
                         a.addProperty("card_index", i);
+                        a.addProperty("card_id", c.cardID);
+                        a.addProperty("uuid", c.uuid.toString());
                         out.add(a);
                     }
                 }

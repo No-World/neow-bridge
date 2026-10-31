@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class Bridge {
 
-    public static final String PROTOCOL_VERSION = "0.3";
-    public static final String BRIDGE_VERSION = "0.2.0";
+    public static final String PROTOCOL_VERSION = "0.4";
+    public static final String BRIDGE_VERSION = "0.3.0";
 
     private static final Logger logger = LogManager.getLogger(Bridge.class.getName());
 

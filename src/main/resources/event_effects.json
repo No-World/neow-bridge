@@ -1,0 +1,45 @@
+{
+  "_schema": "事件选项结构化效果表。键=事件ID，值={选项label(小写): {效果字典}}。效果字典键（全可选）: hp/max_hp/gold(带符号)、heal(数值或'all')、obtain_relic(id或'random')、lose_relic('starting'/'random'/id)、obtain_potion、curse(id或'random')、remove_card/transform_card/upgrade_card(n或'choose')、obtain_card(n或id)、fight(true)、leave(true)、_approx(数据未完全核实)。缺录的事件在观测中无 effects 字段——由 sim 数据管线补全后与 neow-sim/data 同源。",
+  "_todo": ["补全 Act1-3 全部 56 事件（与 sim 事件效果表同源共建）", "升阶修正值（部分事件伤害随进阶变化）"],
+
+  "Golden Idol": {
+    "take": {"obtain_relic": "Golden Idol", "then_fight_trap": true, "_note": "拿取后翻页三选一"},
+    "outrun": {"curse": "Injury"},
+    "smash": {"hp": -21},
+    "hide": {"max_hp": -6},
+    "leave": {"leave": true}
+  },
+  "Shining Light": {
+    "enter": {"hp": -16, "upgrade_card": 2, "_note": "升级的2张随机"},
+    "leave": {"leave": true}
+  },
+  "Living Wall": {
+    "grow": {"upgrade_card": "choose", "_note": "自选1张升级"},
+    "change": {"transform_card": "choose"},
+    "forget": {"remove_card": "choose"},
+    "leave": {"leave": true}
+  },
+  "Secret Portal": {
+    "enter": {"skip_to_boss": true, "_note": "直接传送至Boss层"},
+    "leave": {"leave": true}
+  },
+  "Cleric": {
+    "pay": {"gold": -35, "remove_card": "choose", "_approx": true, "_note": "首次35金后续75金"},
+    "heal": {"gold": -35, "heal": "pct", "_approx": true, "_note": "35金回复部分生命"},
+    "leave": {"leave": true}
+  },
+  "Bonfire Spirits": {
+    "snuff": {"curse": "Shame", "_approx": true},
+    "pray": {"obtain_relic": "random", "_approx": true},
+    "leave": {"leave": true}
+  },
+  "The Woman in Blue": {
+    "buy": {"gold": -45, "obtain_potion": 1, "_approx": true, "_note": "三档价格45/60/75购药水"},
+    "leave": {"leave": true}
+  },
+  "Big Fish": {
+    "banana": {"heal": "pct", "_approx": true},
+    "fish": {"obtain_relic": "random", "_approx": true},
+    "leave": {"leave": true}
+  }
+}

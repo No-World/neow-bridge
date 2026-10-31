@@ -93,6 +93,20 @@ public final class Stability {
             if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.COMBAT_REWARD && AbstractDungeon.combatRewardScreen != null) {
                 h = h * 31 + AbstractDungeon.combatRewardScreen.rewards.size();
             }
+            // 事件对话翻页：选项数量与禁用态参与指纹（否则翻页未稳即落定 → legal/执行器差一帧）
+            if (AbstractDungeon.getCurrRoom() != null && AbstractDungeon.getCurrRoom().event != null) {
+                int n = 0;
+                try {
+                    if (com.neow.bridge.Screens.imageEventDialogShown()) {
+                        n = AbstractDungeon.getCurrRoom().event.imageEventText.optionList.size();
+                    } else {
+                        n = com.megacrit.cardcrawl.events.RoomEventDialog.optionList.size();
+                    }
+                } catch (Throwable ignored) {
+                    n = -1;
+                }
+                h = h * 31 + n;
+            }
         } else {
             h = h * 31 + (CardCrawlGame.mainMenuScreen != null ? 1 : 0);
             h = h * 31 + CardCrawlGame.mode.ordinal();

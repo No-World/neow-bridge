@@ -90,8 +90,26 @@ public final class Actions {
 
     private static ArrayDeque<Runnable> play(JsonObject a) throws InvalidActionException {
         requireScreen(Screens.COMBAT);
-        int ci = intOf(a, "card_index");
         ArrayList<AbstractCard> hand = AbstractDungeon.player.hand.group;
+        int ci;
+        String wantUuid = str(a, "card_uuid");
+        String wantId = str(a, "card_id");
+        if (wantUuid != null || wantId != null) {
+            // 优先 UUID/ID 定位（免疫出牌后手牌下标漂移）；index 仅作兜底
+            ci = -1;
+            for (int i = 0; i < hand.size(); i++) {
+                AbstractCard c = hand.get(i);
+                if (wantUuid != null && c.uuid.toString().equals(wantUuid)) { ci = i; break; }
+                if (wantId != null && c.cardID.equals(wantId)) { ci = i; break; }
+            }
+            if (ci < 0) {
+                throw new InvalidActionException("card not in hand: " + (wantUuid != null ? wantUuid : wantId));
+            }
+        } else if (a.has("card_index")) {
+            ci = intOf(a, "card_index");
+        } else {
+            throw new InvalidActionException("play 需要 card_uuid / card_id / card_index 之一");
+        }
         if (ci < 0 || ci >= hand.size()) {
             throw new InvalidActionException("card_index out of bounds: " + ci);
         }

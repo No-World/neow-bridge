@@ -54,6 +54,22 @@ public final class Obs {
     private Obs() {
     }
 
+    /** 事件选项结构化效果表（resources/event_effects.json，与 sim 数据同源共建）。 */
+    private static com.google.gson.JsonObject EVENT_EFFECTS = null;
+    private static synchronized com.google.gson.JsonObject eventEffects() {
+        if (EVENT_EFFECTS == null) {
+            try {
+                java.io.InputStream in = Obs.class.getResourceAsStream("/event_effects.json");
+                java.util.Scanner sc = new java.util.Scanner(in, "UTF-8").useDelimiter("\\A");
+                String txt = sc.hasNext() ? sc.next() : "{}";
+                EVENT_EFFECTS = new com.google.gson.JsonParser().parse(txt).getAsJsonObject();
+            } catch (Throwable t) {
+                EVENT_EFFECTS = new com.google.gson.JsonObject();
+            }
+        }
+        return EVENT_EFFECTS;
+    }
+
     // ------------------------------------------------------------------
     // 卡牌
     // ------------------------------------------------------------------
@@ -441,6 +457,13 @@ public final class Obs {
                     opt.addProperty("text", stripFormatting(b.msg));
                     opt.addProperty("label", optionLabel(b.msg));
                     opt.addProperty("disabled", b.isDisabled);
+                    com.google.gson.JsonObject tbl = eventEffects().getAsJsonObject(o.get("id").getAsString());
+                    if (tbl != null) {
+                        com.google.gson.JsonElement eff = tbl.get(optionLabel(b.msg).toLowerCase());
+                        if (eff != null && eff.isJsonObject()) {
+                            opt.add("effects", eff);
+                        }
+                    }
                     options.add(opt);
                 }
                 o.add("options", options);

@@ -3,7 +3,7 @@
   "name": "NeowBridge",
   "author": "No-World",
   "description": "Exposes the full game as an external API via the Neow unified gym protocol (docs/protocol.md). Approach forked from CommunicationMod.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "sts_version": "12-20-2022",
   "mts_version": "3.30.0",
   "dependencies": ["basemod"]
