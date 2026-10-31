@@ -108,7 +108,15 @@ public final class Screens {
             return EVENT;
         }
         if (room instanceof TreasureRoomBoss || room instanceof TreasureRoom) {
-            return room.phase == AbstractRoom.RoomPhase.COMPLETE ? COMPLETE : CHEST;
+            // 宝箱房进门 phase 即 COMPLETE（同商店房），判据应是箱子开没开：
+            // 未开=CHEST（可 chest_open），已开=COMPLETE（可 proceed）
+            boolean opened;
+            if (room instanceof TreasureRoomBoss) {
+                opened = ((TreasureRoomBoss) room).chest.isOpen;
+            } else {
+                opened = ((TreasureRoom) room).chest.isOpen;
+            }
+            return opened ? COMPLETE : CHEST;
         }
         if (room instanceof ShopRoom) {
             return SHOP_ROOM; // 商店房进门即 COMPLETE：不按 phase 判，恒为 SHOP_ROOM（进店/离开并存）

@@ -444,6 +444,7 @@ public final class Actions {
             throw new InvalidActionException("reward requires take_indices or skip");
         }
         ArrayList<RewardItem> rewards = AbstractDungeon.combatRewardScreen.rewards;
+        int cardTakeIdx = -1;
         for (JsonElement e : takes) {
             int i = e.isJsonNull() ? -1 : e.getAsInt();
             if (i < 0 || i >= rewards.size()) {
@@ -458,8 +459,52 @@ public final class Actions {
                     && !AbstractDungeon.player.hasRelic("Sozu")) {
                 throw new InvalidActionException("potion slots full; potion_discard first");
             }
+            if (r.type == RewardItem.RewardType.CARD) {
+                if (cardTakeIdx >= 0) {
+                    throw new InvalidActionException("一次 step 只能内联选一张卡（CARD 项多个时分开 step）");
+                }
+                cardTakeIdx = i;
+            }
             final RewardItem item = r;
             tasks.add(() -> item.isDone = true);
+        }
+        // v0.4 内联：reward 带 card_pick 时一步完成 CARD 项——int=选第k张，"skip"=跳过该奖励
+        if (a.has("card_pick")) {
+            if (cardTakeIdx < 0) {
+                throw new InvalidActionException("card_pick 需要 take_indices 中包含 CARD 项");
+            }
+            boolean isSkip = a.get("card_pick").isJsonPrimitive()
+                    && a.get("card_pick").getAsJsonPrimitive().isString()
+                    && "skip".equalsIgnoreCase(a.get("card_pick").getAsString());
+            final int idx;
+            if (!isSkip) {
+                int pick = intOf(a, "card_pick");
+                ArrayList<AbstractCard> pool = rewards.get(cardTakeIdx).cards;
+                if (pick < 0 || pick >= pool.size()) {
+                    throw new InvalidActionException("card_pick out of bounds: " + pick + " (共 " + pool.size() + " 张)");
+                }
+                idx = pick;
+            } else {
+                idx = -1;
+            }
+            // 任务逐帧执行：第1帧领奖开屏，第2帧起选卡/跳过（最多等12帧防过渡）
+            for (int w = 0; w < 12; w++) {
+                tasks.add(() -> {
+                    if (AbstractDungeon.screen == AbstractDungeon.CurrentScreen.CARD_REWARD
+                            && !AbstractDungeon.cardRewardScreen.rewardGroup.isEmpty()) {
+                        if (idx >= 0) {
+                            AbstractCard c = AbstractDungeon.cardRewardScreen.rewardGroup.get(idx);
+                            HoverPatches.CardRewardHover.hoverCard = c;
+                            HoverPatches.CardRewardHover.doHover = true;
+                            c.hb.clicked = true;
+                        } else {
+                            Object skipBtn = ReflectionHacks.getPrivate(AbstractDungeon.cardRewardScreen,
+                                    com.megacrit.cardcrawl.screens.CardRewardScreen.class, "skipButton");
+                            ((com.megacrit.cardcrawl.ui.buttons.SkipCardButton) skipBtn).hb.clicked = true;
+                        }
+                    }
+                });
+            }
         }
         return tasks;
     }

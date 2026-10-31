@@ -123,11 +123,29 @@ public final class Legal {
                         takeable = false; // 满槽：需先 potion_discard
                     }
                     if (takeable) {
-                        JsonObject a = act("reward");
-                        JsonArray idx = new JsonArray();
-                        idx.add(i);
-                        a.add("take_indices", idx);
-                        out.add(a);
+                        if (r.type == RewardItem.RewardType.CARD) {
+                            // 卡牌奖励：每张卡一个内联直选 + 一个跳过变体（cards 在 items 里全量可见，一步定夺）
+                            for (int k = 0; k < r.cards.size(); k++) {
+                                JsonObject a = act("reward");
+                                JsonArray idx = new JsonArray();
+                                idx.add(i);
+                                a.add("take_indices", idx);
+                                a.addProperty("card_pick", k);
+                                out.add(a);
+                            }
+                            JsonObject sk = act("reward");
+                            JsonArray skIdx = new JsonArray();
+                            skIdx.add(i);
+                            sk.add("take_indices", skIdx);
+                            sk.addProperty("card_pick", "skip");
+                            out.add(sk);
+                        } else {
+                            JsonObject a = act("reward");
+                            JsonArray idx = new JsonArray();
+                            idx.add(i);
+                            a.add("take_indices", idx);
+                            out.add(a);
+                        }
                     }
                     i++;
                 }
