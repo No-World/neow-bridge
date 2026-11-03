@@ -211,6 +211,8 @@ public final class Obs {
         }
         o.add("move_history", hist);
         o.addProperty("half_dead", m.halfDead);
+        o.addProperty("alive", !m.isDeadOrEscaped());
+        o.addProperty("escaped", m.isEscaping);
         o.addProperty("is_gone", m.isDeadOrEscaped());
         return o;
     }
@@ -683,6 +685,10 @@ public final class Obs {
         player.addProperty("discarded_this_turn", GameActionManager.discardedThisTurn);
         player.addProperty("hand_cost_zero_this_turn", p.handCostZeroThisTurn);
         player.addProperty("hand_cost_max_one", p.handCostMaxOneThisTurn);
+        // v0.5：回合内计数器 + 未来资源
+        player.addProperty("last_card_type", GameActionManager.lastCardType != null ? GameActionManager.lastCardType.name() : "");
+        player.addProperty("next_turn_draw", GameActionManager.drawCardQueue.size()); // 近似
+        player.addProperty("next_turn_energy", p.energy.energyNext);
         player.add("powers", powers(p.powers));
         JsonObject keys = new JsonObject();
         keys.addProperty("ruby", Settings.hasRubyKey);
