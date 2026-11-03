@@ -214,6 +214,23 @@ public final class Obs {
         o.addProperty("alive", !m.isDeadOrEscaped());
         o.addProperty("escaped", m.isEscaping);
         o.addProperty("is_gone", m.isDeadOrEscaped());
+        // v0.5: Bronze Orb stasis——被吸走的卡（null=无，卡 id 字符串=有）
+        com.megacrit.cardcrawl.cards.AbstractCard stasis = (com.megacrit.cardcrawl.cards.AbstractCard)
+            com.megacrit.cardcrawl.core.Settings.CURRENT_MODIFIERS != null ? null : null; // placeholder
+        // 实际：BronzeOrb 的 stasisCard 是私有字段，通过 ReflectionHacks 获取
+        try {
+            Object orb0 = com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom().monsters.monsters.stream()
+                .filter(mm -> mm instanceof com.megacrit.cardcrawl.monsters.beyond.BronzeOrb)
+                .findFirst().orElse(null);
+            if (orb0 != null) {
+                com.megacrit.cardcrawl.cards.AbstractCard sc = (com.megacrit.cardcrawl.cards.AbstractCard)
+                    com.megacrit.cardcrawl.helpers.ReflectionHacks.getPrivate(orb0,
+                        com.megacrit.cardcrawl.monsters.beyond.BronzeOrb.class, "stasisCard");
+                if (sc != null) {
+                    o.addProperty("stasis_card", sc.cardID);
+                }
+            }
+        } catch (Exception e) { /* no Bronze Orb present */ }
         return o;
     }
 
@@ -730,6 +747,13 @@ public final class Obs {
             entry.addProperty("counter", r.counter);
             entry.addProperty("tier", r.tier.name());
             entry.addProperty("enabled", !r.grayscale);
+            // v0.5: counter period（周期类遗物的满值）
+            int period = com.neow.bridge.RelicPeriods.getPeriod(r.relicId);
+            if (period > 0) {
+                entry.addProperty("period", period);
+                entry.addProperty("ready", r.counter >= period);
+            }
+            entry.addProperty("used_this_turn", r.counter == 0 && period > 0);
             relics.add(entry);
         }
         o.add("relics", relics);
