@@ -678,6 +678,11 @@ public final class Obs {
         player.addProperty("gold", p.gold);
         player.addProperty("potion_slots", p.potionSlots);
         player.addProperty("hand_size", p.gameHandSize);
+        // ── v0.5 新增：回合内计数器 ──
+        player.addProperty("attacks_this_turn", GameActionManager.attacksThisTurn);
+        player.addProperty("discarded_this_turn", GameActionManager.discardedThisTurn);
+        player.addProperty("hand_cost_zero_this_turn", p.handCostZeroThisTurn);
+        player.addProperty("hand_cost_max_one", p.handCostMaxOneThisTurn);
         player.add("powers", powers(p.powers));
         JsonObject keys = new JsonObject();
         keys.addProperty("ruby", Settings.hasRubyKey);
