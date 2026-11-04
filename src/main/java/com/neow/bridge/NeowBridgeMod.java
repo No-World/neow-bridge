@@ -59,6 +59,7 @@ public class NeowBridgeMod implements PreUpdateSubscriber, PostUpdateSubscriber,
     public void receivePostUpdate() {
         try {
             skipSplashIfNeeded();
+            RngWatch.frame();
             Bridge.onPostUpdate();
         } catch (Throwable t) {
             logger.error("PostUpdate hook error", t);

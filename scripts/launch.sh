@@ -24,7 +24,7 @@ fi
 EXTRA=""
 [[ "${NEOW_BRIDGE_HIDDEN:-0}" == "1" ]] && EXTRA="-Hidden"
 # WSL→Windows 环境变量需显式列在 WSLENV 才会传递
-export WSLENV="${WSLENV:+$WSLENV:}NEOW_TRACE_SHUFFLE"
+export WSLENV="${WSLENV:+$WSLENV:}NEOW_TRACE_SHUFFLE:NEOW_TRACE_RNG"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w "$ROOT/scripts/launch.ps1")" \
   -RtDir "$(wslpath -w "$RT")" \
   -JavaExe "$(wslpath -w "$STS_DIR/jre/bin/java.exe")" \
