@@ -55,6 +55,15 @@ public final class Obs {
     }
 
     /** 事件选项结构化效果表（resources/event_effects.json，与 sim 数据同源共建）。 */
+    /** 本回合最后打出的牌类型名（无记录返回空串）。 */
+    private static String lastCardTypeName() {
+        java.util.ArrayList<com.megacrit.cardcrawl.cards.AbstractCard> played =
+                com.megacrit.cardcrawl.dungeons.AbstractDungeon.actionManager.cardsPlayedThisTurn;
+        if (played == null || played.isEmpty()) return "";
+        com.megacrit.cardcrawl.cards.AbstractCard last = played.get(played.size() - 1);
+        return last.type != null ? last.type.name() : "";
+    }
+
     private static com.google.gson.JsonObject EVENT_EFFECTS = null;
     private static synchronized com.google.gson.JsonObject eventEffects() {
         if (EVENT_EFFECTS == null) {
@@ -214,20 +223,24 @@ public final class Obs {
         o.addProperty("alive", !m.isDeadOrEscaped());
         o.addProperty("escaped", m.isEscaping);
         o.addProperty("is_gone", m.isDeadOrEscaped());
-        // v0.5: Bronze Orb stasis——被吸走的卡（null=无，卡 id 字符串=有）
-        com.megacrit.cardcrawl.cards.AbstractCard stasis = (com.megacrit.cardcrawl.cards.AbstractCard)
-            com.megacrit.cardcrawl.core.Settings.CURRENT_MODIFIERS != null ? null : null; // placeholder
-        // 实际：BronzeOrb 的 stasisCard 是私有字段，通过 ReflectionHacks 获取
+        // Bronze Orb stasis：被吸走的卡（stasisCard 为私有字段，用反射读）
         try {
-            Object orb0 = com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom().monsters.monsters.stream()
-                .filter(mm -> mm instanceof com.megacrit.cardcrawl.monsters.beyond.BronzeOrb)
-                .findFirst().orElse(null);
-            if (orb0 != null) {
-                com.megacrit.cardcrawl.cards.AbstractCard sc = (com.megacrit.cardcrawl.cards.AbstractCard)
-                    com.megacrit.cardcrawl.helpers.ReflectionHacks.getPrivate(orb0,
-                        com.megacrit.cardcrawl.monsters.beyond.BronzeOrb.class, "stasisCard");
-                if (sc != null) {
-                    o.addProperty("stasis_card", sc.cardID);
+            if (com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom() != null
+                    && com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom().monsters != null) {
+                Object orb = null;
+                for (Object mm : com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom().monsters.monsters) {
+                    if (mm instanceof com.megacrit.cardcrawl.monsters.city.BronzeOrb) {
+                        orb = mm;
+                        break;
+                    }
+                }
+                if (orb != null) {
+                    Object sc = basemod.ReflectionHacks.getPrivate(orb,
+                            com.megacrit.cardcrawl.monsters.city.BronzeOrb.class, "stasisCard");
+                    if (sc instanceof com.megacrit.cardcrawl.cards.AbstractCard) {
+                        o.addProperty("stasis_card",
+                                ((com.megacrit.cardcrawl.cards.AbstractCard) sc).cardID);
+                    }
                 }
             }
         } catch (Exception e) { /* no Bronze Orb present */ }
@@ -697,15 +710,25 @@ public final class Obs {
         player.addProperty("gold", p.gold);
         player.addProperty("potion_slots", p.potionSlots);
         player.addProperty("hand_size", p.gameHandSize);
-        // ── v0.5 新增：回合内计数器 ──
-        player.addProperty("attacks_this_turn", GameActionManager.attacksThisTurn);
-        player.addProperty("discarded_this_turn", GameActionManager.discardedThisTurn);
-        player.addProperty("hand_cost_zero_this_turn", p.handCostZeroThisTurn);
-        player.addProperty("hand_cost_max_one", p.handCostMaxOneThisTurn);
-        // v0.5：回合内计数器 + 未来资源
-        player.addProperty("last_card_type", GameActionManager.lastCardType != null ? GameActionManager.lastCardType.name() : "");
-        player.addProperty("next_turn_draw", GameActionManager.drawCardQueue.size()); // 近似
-        player.addProperty("next_turn_energy", p.energy.energyNext);
+        // ── 回合内计数器（全部走真实存在的字段/推导） ──
+        // 本回合打出的牌数（AbstractPlayer.cardsPlayedThisTurn）与其中攻击牌数
+        player.addProperty("cards_played_this_turn", p.cardsPlayedThisTurn);
+        int atk = 0;
+        int lastTypeIdx = -1;
+        for (com.megacrit.cardcrawl.cards.CardQueueItem qi : AbstractDungeon.actionManager.cardQueue) {
+            if (qi.card == null) continue;
+            if (qi.card.type == AbstractCard.CardType.ATTACK) ++atk;
+            lastTypeIdx = qi.card.type.ordinal();
+        }
+        // 已结算的那部分：GameActionManager.cardsPlayedThisTurn（ArrayList）
+        for (Object o2 : AbstractDungeon.actionManager.cardsPlayedThisTurn) {
+            if (!(o2 instanceof AbstractCard)) continue;
+            AbstractCard c2 = (AbstractCard) o2;
+            if (c2.type == AbstractCard.CardType.ATTACK) ++atk;
+        }
+        player.addProperty("attacks_this_turn", atk);
+        // 本回合最后打出的牌类型（无则空串）
+        player.addProperty("last_card_type", lastCardTypeName());
         player.add("powers", powers(p.powers));
         JsonObject keys = new JsonObject();
         keys.addProperty("ruby", Settings.hasRubyKey);

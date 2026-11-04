@@ -9,7 +9,8 @@
 """
 import json, socket, sys
 
-HOST, PORT = "127.0.0.1", 37771
+import os
+HOST, PORT = "127.0.0.1", int(os.environ.get("NEOW_BRIDGE_PORT", "37771"))
 
 def call(req):
     s = socket.create_connection((HOST, PORT), timeout=120)

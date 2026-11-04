@@ -15,6 +15,9 @@ param(
     [switch]$Hidden
 )
 $env:NEOW_BRIDGE_PORT = "$Port"
+# WSL 环境变量不会自动传到 Windows 进程（需 WSLENV），这里显式转发洗牌追踪开关
+if ($env:NEOW_TRACE_SHUFFLE) { $env:NEOW_TRACE_SHUFFLE = $env:NEOW_TRACE_SHUFFLE }
+
 $env:NEOW_BRIDGE_BIND = $Bind
 Start-Process -FilePath $JavaExe `
     -ArgumentList '-Xmx2048m','-jar','ModTheSpire.jar','--mods','basemod,neow-bridge','--skip-launcher' `
