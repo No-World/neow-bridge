@@ -77,6 +77,43 @@ public final class Commands {
         } else if (NEW_RUN.equals(cmd) || "step".equals(cmd) || "get_state".equals(cmd)
                 || QUIT_RUN.equals(cmd)) {
             result = gymState();
+        } else if ("diag".equals(cmd)) {
+            // 诊断：事件屏两个 dialog 的原始状态（定位「屏判定 vs 按钮来源」不一致）
+            com.megacrit.cardcrawl.rooms.AbstractRoom room =
+                    com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom();
+            result.addProperty("room_class", room == null ? "null" : room.getClass().getSimpleName());
+            result.addProperty("phase", room == null ? "null" : String.valueOf(room.phase));
+            result.addProperty("is_screen_up",
+                    com.megacrit.cardcrawl.dungeons.AbstractDungeon.isScreenUp);
+            result.addProperty("screen",
+                    String.valueOf(com.megacrit.cardcrawl.dungeons.AbstractDungeon.screen));
+            if (room != null && room.event != null) {
+                result.addProperty("event_class", room.event.getClass().getSimpleName());
+                result.addProperty("has_focus", room.event.hasFocus);
+                result.addProperty("has_dialog", room.event.hasDialog);
+                result.addProperty("image_show", Screens.imageEventDialogShown());
+                result.addProperty("image_opts", room.event.imageEventText.optionList.size());
+                result.addProperty("room_opts",
+                        com.megacrit.cardcrawl.events.RoomEventDialog.optionList.size());
+                result.addProperty("wait_for_input",
+                        com.megacrit.cardcrawl.events.RoomEventDialog.waitForInput);
+                result.addProperty("wait_timer", room.event.waitTimer);
+                StringBuilder sb = new StringBuilder();
+                for (com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton b
+                        : room.event.imageEventText.optionList) {
+                    sb.append('[').append(b.msg).append(b.isDisabled ? "(D)" : "").append(']');
+                }
+                result.addProperty("image_texts", sb.toString());
+                StringBuilder rb = new StringBuilder();
+                for (com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton b
+                        : com.megacrit.cardcrawl.events.RoomEventDialog.optionList) {
+                    rb.append('[').append(b.msg).append(b.isDisabled ? "(D)" : "").append(']');
+                }
+                result.addProperty("room_texts", rb.toString());
+            }
+            result.addProperty("monsters",
+                    room == null || room.monsters == null ? -1 : room.monsters.monsters.size());
+            result.addProperty("elite_trigger", room != null && room.eliteTrigger);
         } else if ("kill_game".equals(cmd) || "config".equals(cmd)) {
             result.addProperty("done", true);
         } else {
@@ -152,6 +189,8 @@ public final class Commands {
                 return quitRun();
             case "kill_game":
                 return killGame();
+            case "diag":
+                return null; // 诊断：直接由 Bridge 返回 detail（见 Server）
             case "config":
                 return config(request);
             default:

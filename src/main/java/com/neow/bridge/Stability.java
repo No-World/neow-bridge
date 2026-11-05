@@ -141,7 +141,11 @@ public final class Stability {
         if ((room instanceof EventRoom
                 || (room.event != null && room.event instanceof NeowEvent)
                 || (room instanceof VictoryRoom && ((VictoryRoom) room).eType == VictoryRoom.EventType.HEART))
-                && room.event != null && room.event.waitTimer != 0.0f) {
+                && room.event != null && room.event.waitTimer > 0.0f) {
+            // ⚠️ 判据必须是 `> 0`，不能是 `!= 0`：AbstractEvent.update 只在
+            // `waitTimer < 0 && hasDialog` 时才归零；hasDialog=false 的事件
+            // （如 Dead Adventurer 被偷袭后）会把 waitTimer 停在**负值**，
+            // 用 `!= 0` 会永远判「未静止」→ bridge 卡在 SETTLING、legal_actions 为空。
             return false;
         }
         if (room.phase == AbstractRoom.RoomPhase.COMBAT) {

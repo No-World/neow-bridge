@@ -602,10 +602,23 @@ public final class Obs {
 
     static ArrayList<LargeDialogOptionButton> eventButtons() {
         AbstractEvent event = AbstractDungeon.getCurrRoom().event;
-        if (Screens.imageEventDialogShown()) {
-            return event.imageEventText.optionList;
+        // ⚠️ 不能只看 GenericEventDialog.show：Dead Adventurer 等事件在「被偷袭」
+        // 后把选项放进 imageEventText，但 show 已翻 false，导致 optionList 读错、
+        // legal_actions 为空 → 驱动卡死（实测 floor11 3 Sentries 事件战）。
+        // 改为「取非空的那个」，两个都空才算无按钮（Gremlin 小游戏走另一条路）。
+        if (event == null) {
+            return com.megacrit.cardcrawl.events.RoomEventDialog.optionList;
         }
-        return com.megacrit.cardcrawl.events.RoomEventDialog.optionList;
+        ArrayList<LargeDialogOptionButton> img = event.imageEventText.optionList;
+        if (img != null && !img.isEmpty()) {
+            return img;
+        }
+        ArrayList<LargeDialogOptionButton> room =
+                com.megacrit.cardcrawl.events.RoomEventDialog.optionList;
+        if (room != null && !room.isEmpty()) {
+            return room;
+        }
+        return Screens.imageEventDialogShown() ? img : room;
     }
 
     static String eventId(AbstractEvent event) {
