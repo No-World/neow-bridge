@@ -67,3 +67,7 @@ com.neow.bridge
 ## 对拍（M4，待做）
 
 `neow-sim/tests/conformance/` 黄金用例 ↔ 本桥 runner 逐状态 diff（见 docs/roadmap.md P2）。
+
+## 许可与声明
+
+本项目原创代码以 [MIT License](LICENSE) 授权；本项目为《Slay the Spire》的非官方模组，游戏相关知识产权归 Mega Crit，详见 [LICENSE](LICENSE)。使用需持有正版游戏。
