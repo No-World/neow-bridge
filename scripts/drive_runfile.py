@@ -226,6 +226,7 @@ class Session:
         self.steps = []          # 当前 floor 剩余的计划步骤
         self.boss_i = 0          # 第几个 Boss 遗物
         self.bought = set()      # 已买过的物品名
+        self.entered_shop = False
         self.warnings = []       # 计划与实际不符的记录
         self.cur_hp = None
         self.cur_gold = None
@@ -234,6 +235,7 @@ class Session:
     def enter_floor(self, floor):
         if floor != self.floor:
             self.floor = floor
+            self.entered_shop = False
             self.steps = list(PLAN.get(floor, []))
             if floor > 0:
                 t = target_at(floor)
@@ -584,9 +586,14 @@ def decide(sess, res):
 
     # ── 商店 ──
     if t == "shop_room":
-        want_shop = any(s["kind"] == "shop" for s in sess.steps)
-        if want_shop and by("shop_enter"):
-            return by("shop_enter")[0], "shop:enter"
+        # ⚠️ 只进店一次：买完/买不到后必须 proceed 离开，否则会在
+        #    shop_room → shop_enter → shop → cancel 之间死循环
+        #    （实测 F12 空转 2900 步）。
+        if not getattr(sess, "entered_shop", False):
+            want_shop = any(s["kind"] == "shop" for s in sess.steps)
+            if want_shop and by("shop_enter"):
+                sess.entered_shop = True
+                return by("shop_enter")[0], "shop:enter"
         if by("proceed"):
             return by("proceed")[0], "shop:proceed"
         return (by("shop_enter")[0], "shop:enter") if by("shop_enter") else (None, "shop-none")
@@ -614,7 +621,12 @@ def decide(sess, res):
                         sess.take(k2)
                         sess.bought.add(want)
                         return a, "shop:buy-" + want
-        # 买完了 → cancel 关店（下一帧 shop_room 会 proceed）
+        # 该层所有 shop 步骤都试过 → 放弃未买到的（记 WARN），然后 cancel 关店
+        for k2, s in enumerate(list(sess.steps)):
+            if s["kind"] == "shop" and s.get("buy"):
+                sess.warn("F%d 商店买不到 %s（货架无同名或金币不足 %s）" % (
+                    sess.floor, s["buy"], p["gold"]))
+                sess.take(k2)
         if by("cancel"):
             return by("cancel")[0], "shop:cancel"
         return (by("proceed")[0], "shop:proceed") if by("proceed") else (None, "shop-none")
