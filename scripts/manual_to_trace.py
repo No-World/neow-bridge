@@ -27,8 +27,27 @@ AT = {"play": 0, "end_turn": 1, "map": 4, "event": 5, "rest": 6,
       "grid_select": 16, "hand_select": 17, "potion": 2, "shop_buy_card": 7}
 
 
+def card_id(c):
+    """deck 元素兼容 tuple/list (id, upgraded) 与 dict。"""
+    if isinstance(c, dict):
+        cid = c.get("id")
+        return cid + "+1" if c.get("upgraded") else cid
+    if isinstance(c, (list, tuple)):
+        return c[0]
+    return c
+
+
+def _card_key(h):
+    """hand 元素兼容两种格式：tuple/list (id, upgraded, cost) 或 dict。"""
+    if isinstance(h, dict):
+        return (h.get("id"), h.get("upgraded"), h.get("cost_for_turn"))
+    if isinstance(h, (list, tuple)):
+        return (h[0], h[1], h[2] if len(h) > 2 else None)
+    return (h, None, None)
+
+
 def hand_ids(st):
-    return [(h[0], h[1]) for h in (st.get("hand") or [])]
+    return [_card_key(h) for h in (st.get("hand") or [])]
 
 
 def infer_action(prev, nxt):
@@ -97,8 +116,8 @@ def infer_action(prev, nxt):
     if psc == "card_reward":
         if (nxt.get("meta") or {}).get("floor") is not None:
             po = ((ps.get("screen_payload") or {}).get("cards") or [])
-            nd = [d[0] for d in (nxt.get("deck") or [])]
-            pd = [d[0] for d in (ps.get("deck") or [])]
+            nd = [card_id(d) for d in (nxt.get("deck") or [])]
+            pd = [card_id(d) for d in (ps.get("deck") or [])]
             added = [c for c in nd if nd.count(c) > pd.count(c)]
             if added:
                 for idx, cid in enumerate(po):

@@ -166,6 +166,8 @@ class Session:
         return None, None
 
     def take(self, k):
+        if k is None or k < 0 or k >= len(self.steps):
+            return None
         return self.steps.pop(k)
 
     def fork(self, msg):
@@ -356,6 +358,11 @@ def decide(sess, res):
             sess.fork("F%d 事件 %s → 实际 %s" % (sess.floor, step["event"], evid))
             while sess.steps and sess.steps[0].get("event"):
                 sess.steps.pop(0)
+            # ⚠️ 事件分叉会改变牌组/遗物，进而让**后续所有层**的计划失效。
+            #    与其逐层报 WARN，不如整体切到「自主决策」模式：清空剩余计划，
+            #    之后全部按当前实际状态决策（录制仍完整，trace 依然可用）。
+            sess.plan = {f: [] for f in sess.plan}
+            sess.steps = []
             step, k = None, None
 
         if step and step.get("match"):
