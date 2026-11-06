@@ -33,8 +33,9 @@ public final class Recorder {
     private static String lastHash = "";
     private static int seq = 0;
     private static long startedAt = 0;
-    private static String lastFloor = "";
-    private static String lastTurn = "";
+    private static int lastFloor = -1;
+    private static int lastTurn = -1;
+    private static boolean lastInCombat = false;
     private static final ArrayList<String> slMarks = new ArrayList<>();
 
     private Recorder() {
@@ -74,8 +75,9 @@ public final class Recorder {
             path = f.getAbsolutePath();
             seq = 0;
             lastHash = "";
-            lastFloor = "";
-            lastTurn = "";
+            lastFloor = -1;
+            lastTurn = -1;
+            lastInCombat = false;
             slMarks.clear();
             startedAt = System.currentTimeMillis();
             r.addProperty("started", true);
@@ -141,19 +143,30 @@ public final class Recorder {
             write(rec);
 
             // S/L 检测：**只标记，不丢记录**
-            String floor = String.valueOf(info.has("floor") ? info.get("floor").getAsInt() : -1);
+            // ⚠️ 只在「同为战斗屏」时比 turn —— 非战斗屏 turn 为 null，
+            //    与数值比较会误报（实测误报 90+ 次）。
+            int fl = info.has("floor") ? info.get("floor").getAsInt() : -1;
             JsonObject meta = obs.has("meta") ? obs.getAsJsonObject("meta") : new JsonObject();
-            String turn = meta.has("turn") && !meta.get("turn").isJsonNull()
-                    ? meta.get("turn").getAsString() : "";
-            if (!lastFloor.isEmpty() && floor.compareTo(lastFloor) < 0) {
-                markSL("floor 回退 " + lastFloor + " -> " + floor);
-            } else if (!lastTurn.isEmpty() && turn.compareTo(lastTurn) < 0) {
-                markSL("turn 回退 " + lastTurn + " -> " + turn + "（floor " + floor + "）");
+            Integer turn = null;
+            if (meta.has("turn") && !meta.get("turn").isJsonNull()) {
+                try {
+                    turn = meta.get("turn").getAsInt();
+                } catch (Throwable ignored) {
+                }
             }
-            lastFloor = floor;
-            if (!turn.isEmpty()) {
-                lastTurn = turn;
+            boolean inCombat = "combat".equals(info.has("screen")
+                    ? info.get("screen").getAsString() : "");
+            // ⚠️ 战斗结束后 turn 归 1（下一场战斗从 1 开始），这不是 S/L：
+            //    必须「上一帧也在战斗屏」才比 turn。lastInCombat 记录上一帧屏类型。
+            if (lastFloor >= 0 && fl < lastFloor) {
+                markSL("floor 回退 " + lastFloor + " -> " + fl);
+            } else if (inCombat && lastInCombat && lastTurn >= 0
+                    && turn != null && turn < lastTurn) {
+                markSL("turn 回退 " + lastTurn + " -> " + turn + "（floor " + fl + "）");
             }
+            lastFloor = fl;
+            lastInCombat = inCombat;
+            lastTurn = (inCombat && turn != null) ? turn : -1;
         } catch (Throwable t) {
             logger.error("recorder frame failed", t);
         }

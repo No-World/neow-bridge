@@ -545,6 +545,68 @@ def snapshot(obs, info):
     }
 
 
+def legal_list(res):
+    return res.get("legal_actions") or []
+
+
+def combat_action(legal, obs):
+    """战斗启发式（与 drive_runfile 同一套；存档无逐回合真值）。"""
+    p = obs.get("player") or {}
+    hp, mx = p.get("hp") or 0, p.get("max_hp") or 1
+    monsters = obs.get("monsters") or []
+    hand = obs.get("hand") or []
+    alive = [m for m in monsters if not m.get("is_gone")]
+    incoming = 0
+    for m in alive:
+        it = m.get("intent") or {}
+        if (it.get("type") or "").startswith("ATTACK"):
+            incoming += (it.get("damage") or 0) * (it.get("count") or 1)
+    plays = [a for a in legal if a["type"] == "play"]
+
+    # 1) 致命一击
+    for a in plays:
+        tgt = a.get("target")
+        if tgt is None:
+            continue
+        c = hand[a["card_index"]]
+        if c.get("type") != "ATTACK":
+            continue
+        m = monsters[tgt]
+        if (c.get("damage") or 0) >= (m["hp"] - (m.get("block") or 0)):
+            return a
+    # 2) 能力牌
+    powers = [a for a in plays if hand[a["card_index"]].get("type") == "POWER"]
+    if powers:
+        return powers[0]
+    # 3) 补格挡
+    if incoming > (p.get("block") or 0):
+        defs = [a for a in plays if (hand[a["card_index"]].get("block") or 0) > 0]
+        if defs:
+            defs.sort(key=lambda a: -hand[a["card_index"]].get("block", 0))
+            return defs[0]
+    # 4) 攻击（威胁最大的优先）
+    atk = [a for a in plays if hand[a["card_index"]].get("type") == "ATTACK"]
+    if atk:
+        def key(a):
+            t = a.get("target")
+            if t is None:
+                return (999, 0)
+            m = monsters[t]
+            it = m.get("intent") or {}
+            threat = (it.get("damage") or 0) * (it.get("count") or 1)
+            return (-threat, m["hp"])
+        atk.sort(key=key)
+        return atk[0]
+    if plays:
+        return plays[0]
+    boss_like = len(alive) == 1 and (alive[0].get("hp") or 0) > 90
+    if hp < mx * 0.3 or (boss_like and hp < mx * 0.5):
+        pots = [a for a in legal if a["type"] == "potion"]
+        if pots:
+            return pots[0]
+    return {"type": "end_turn"}
+
+
 class ContinuityMonitor:
     """S/L 检测：录制的每一步都必须单调前进（floor/turn 不倒退、怪物不回血）。"""
 
@@ -638,6 +700,8 @@ def main():
     ap.add_argument("run", help="*.run 存档路径")
     ap.add_argument("--out", default=None)
     ap.add_argument("--poll", type=float, default=0.4)
+    ap.add_argument("--manual-combat", action="store_true",
+                    help="战斗屏等你手动打（默认脚本自动打）")
     args = ap.parse_args()
 
     rf = json.load(open(args.run, encoding="utf-8"))
@@ -674,7 +738,11 @@ def main():
         return 1
     res = r["result"]
 
-    fh = open(out, "w", encoding="utf-8")
+    # 录制交给 bridge 原生记录器（逐帧、不漏状态）
+    r = rpc("record_start", file=out)
+    if not r.get("ok") or not (r.get("result") or {}).get("started"):
+        print("record_start 失败:", r.get("result"), flush=True)
+    rec_path = (r.get("result") or {}).get("path", out)
     sess = Session(plan, rf)
     n, last_hash, t0 = 0, None, time.time()
     monitor = ContinuityMonitor()
@@ -712,47 +780,43 @@ def main():
                 #     ② 打印警告，继续录
                 #     ③ 对拍时（manual_to_trace）把这些区间标为「非正常对局」，
                 #        不参与严格逐点比对（但保留在文件里，供事后分析）
-                n += 1
-                fh.write(json.dumps({"i": n, "t": round(time.time() - t0, 1),
-                                     "type": "sl_marker",
-                                     "reason": monitor.reason,
-                                     "state": snapshot(obs, info)},
-                                    ensure_ascii=False) + "\n")
-                fh.flush()
-                sl_marks.append({"i": n, "reason": monitor.reason, "t": round(time.time() - t0, 1)})
-                print("  ⚠ S/L 标记 #%d: %s（继续录制）" % (n, monitor.reason), flush=True)
+                sl_marks.append({"i": n, "reason": monitor.reason})
+                print("  ⚠ S/L 标记: %s（继续录制，bridge 也会记一条 sl_marker）"
+                      % monitor.reason, flush=True)
             sess.enter_floor(floor)
 
-            # 录制：状态变化就记
+            # 录制由 bridge 逐帧完成；这里只打印进度
+            scr_t = (obs.get("screen") or {}).get("type")
             h = rule_hash(obs, info)
             if h != last_hash:
                 last_hash = h
-                fh.write(json.dumps({"i": n, "t": round(time.time() - t0, 1),
-                                     "action": None,
-                                     "state": snapshot(obs, info),
-                                     "legal": [(a.get("type"), a.get("entity"),
-                                                a.get("target"), a.get("card_index"),
-                                                a.get("option_index"), a.get("index"))
-                                               for a in (res.get("legal_actions") or [])]
-                                     }, ensure_ascii=False) + "\n")
-                fh.flush()
                 n += 1
-                scr_t = (obs.get("screen") or {}).get("type")
                 if scr_t != "combat":
                     p = obs.get("player") or {}
-                    print("  [%5.0fs] #%-4d F%-2s %-14s hp%s/%s 金%s" % (
-                        time.time() - t0, n, floor, scr_t, p.get("hp"),
+                    print("  [%5.0fs] F%-2s %-14s hp%s/%s 金%s" % (
+                        time.time() - t0, floor, scr_t, p.get("hp"),
                         p.get("max_hp"), p.get("gold")), flush=True)
 
-            # 战斗屏：不动作，等真人
+            # 战斗屏：默认脚本自动打（--manual-combat 则等真人）
             if (obs.get("screen") or {}).get("type") == "combat":
                 if not in_combat:
                     in_combat = True
                     print_combat(obs, info)
-                time.sleep(args.poll)
-                r = rpc("get_state")
-                if r.get("ok"):
-                    res = r["result"]
+                if args.manual_combat:
+                    time.sleep(args.poll)
+                    r = rpc("get_state")
+                    if r.get("ok"):
+                        res = r["result"]
+                    continue
+                # 自动战斗：复用 combat_action
+                a = combat_action(legal_list(res), obs)
+                r = rpc("step", action=a)
+                if not r.get("ok"):
+                    print("  combat step 失败: %s" % str(r.get("error"))[:80], flush=True)
+                    time.sleep(0.5)
+                r2 = rpc("get_state")
+                if r2.get("ok"):
+                    res = r2["result"]
                 continue
             if in_combat:
                 in_combat = False
@@ -776,9 +840,11 @@ def main():
     except KeyboardInterrupt:
         print("\n[Ctrl+C] 停止", flush=True)
     finally:
-        fh.close()
+        rs = rpc("record_stop")
+        print("\n[bridge 录制] %s" % json.dumps(rs.get("result"), ensure_ascii=False),
+              flush=True)
 
-    print(f"\n=== 录制 {n} 步 -> {out} ===")
+    print(f"\n=== 进度 {n} 个状态变化 -> {rec_path} ===")
     if sl_marks:
         print(f"⚠ 期间检测到 {len(sl_marks)} 处 S/L（已标记，未丢记录）：")
         for m in sl_marks[:10]:
