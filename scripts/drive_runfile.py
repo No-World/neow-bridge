@@ -227,6 +227,7 @@ class Session:
         self.boss_i = 0          # 第几个 Boss 遗物
         self.bought = set()      # 已买过的物品名
         self.entered_shop = False
+        self.pending_grid_target = None
         self.warnings = []       # 计划与实际不符的记录
         self.cur_hp = None
         self.cur_gold = None
@@ -235,8 +236,9 @@ class Session:
     def enter_floor(self, floor):
         if floor != self.floor:
             self.floor = floor
-            self.entered_shop = False
             self.steps = list(PLAN.get(floor, []))
+            self.entered_shop = False
+            self.pending_grid_target = None
             if floor > 0:
                 t = target_at(floor)
                 print("  [target] F%-2d 目标 gold=%s hp=%s max=%s" % (
@@ -519,6 +521,11 @@ def decide(sess, res):
         if want:
             for a in by("rest"):
                 if a.get("option") == want:
+                    # ⚠️ pop 之前把「升级目标」留给后面的 grid_select 屏：
+                    #    曾直接 pop → grid_select 时计划里已无 target →
+                    #    兜底选 indices[0]（手牌第一张 = 打击），存档要的
+                    #    Reckless Charge / Barricade / Shockwave 全没升上。
+                    sess.pending_grid_target = step.get("target")
                     sess.take(k)
                     return a, "campfire:" + want
             sess.warn("F%d 营火要 %s，实际 %s" % (
@@ -656,11 +663,23 @@ def decide(sess, res):
         if scr.get("confirm_up"):
             return {"type": "grid_select", "indices": []}, "grid:confirm"
         cards = scr.get("cards") or []
-        # 营火 SMITH 目标 / 事件选牌目标
+        # 营火 SMITH 目标（campfire 分支已把 target 存到 pending_grid_target）
+        tgt = getattr(sess, "pending_grid_target", None)
+        if tgt and cards:
+            base = tgt.split("+")[0]
+            for idx, c in enumerate(cards):
+                if (c.get("id") or "").split("+")[0] == base:
+                    sess.pending_grid_target = None
+                    return {"type": "grid_select", "indices": [idx]}, "grid:" + base
+            sess.warn("F%d 营火升级目标 %s 不在候选 %s" % (
+                sess.floor, tgt, [c.get("id") for c in cards]))
+            sess.pending_grid_target = None
+        # 事件选牌目标
         for s in sess.steps:
-            tgt = s.get("target") or (s.get("record") or {}).get("cards_upgraded", [None])[0]
-            if tgt and cards:
-                base = tgt.split("+")[0]
+            tgt2 = (s.get("record") or {}).get("cards_upgraded") or \
+                   (s.get("record") or {}).get("cards_obtained") or []
+            if tgt2 and cards:
+                base = tgt2[0].split("+")[0]
                 for idx, c in enumerate(cards):
                     if (c.get("id") or "").split("+")[0] == base:
                         return {"type": "grid_select", "indices": [idx]}, "grid:" + base

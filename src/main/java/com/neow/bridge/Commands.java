@@ -121,6 +121,35 @@ public final class Commands {
                 }
                 result.addProperty("room_texts", rb.toString());
             }
+            // 事件池的真实内容与顺序（对拍 shrine/special 池顺序用）
+            try {
+                java.lang.reflect.Field sf2 = com.megacrit.cardcrawl.dungeons.AbstractDungeon.class
+                        .getDeclaredField("shrineList");
+                sf2.setAccessible(true);
+                Object shrine = sf2.get(null);
+                result.addProperty("shrineList", String.valueOf(shrine));
+                java.lang.reflect.Field sf3 = com.megacrit.cardcrawl.dungeons.AbstractDungeon.class
+                        .getDeclaredField("specialOneTimeEventList");
+                sf3.setAccessible(true);
+                result.addProperty("specialList", String.valueOf(sf3.get(null)));
+                java.lang.reflect.Field sf4 = com.megacrit.cardcrawl.dungeons.AbstractDungeon.class
+                        .getDeclaredField("eventList");
+                sf4.setAccessible(true);
+                Object evl = sf4.get(null);
+                result.addProperty("eventList", String.valueOf(evl));
+                result.addProperty("eventRng_counter",
+                        com.megacrit.cardcrawl.dungeons.AbstractDungeon.eventRng == null ? -1
+                                : com.megacrit.cardcrawl.dungeons.AbstractDungeon.eventRng.counter);
+                result.addProperty("floor_num", com.megacrit.cardcrawl.dungeons.AbstractDungeon.floorNum);
+                result.addProperty("dungeon_id", String.valueOf(
+                        com.megacrit.cardcrawl.dungeons.AbstractDungeon.id));
+                java.lang.reflect.Field sf5 = com.megacrit.cardcrawl.dungeons.AbstractDungeon.class
+                        .getDeclaredField("shrineChance");
+                sf5.setAccessible(true);
+                result.addProperty("shrine_chance", String.valueOf(sf5.get(null)));
+            } catch (Throwable t) {
+                result.addProperty("pools_err", String.valueOf(t));
+            }
             result.addProperty("monsters",
                     room == null || room.monsters == null ? -1 : room.monsters.monsters.size());
             result.addProperty("elite_trigger", room != null && room.eliteTrigger);
