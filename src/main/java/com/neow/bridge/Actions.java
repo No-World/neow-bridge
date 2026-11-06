@@ -579,8 +579,19 @@ public final class Actions {
 
     private static ArrayDeque<Runnable> proceed() throws InvalidActionException {
         String scr = Screens.current();
+        // ⚠️ EVENT 也要允许 proceed：事件内精英战打完后 phase=COMPLETE、dialog 清空，
+        //    真游戏只剩「继续」按钮（Dead Adventurer / Mushrooms / Colosseum 等）。
+        //    否则 Legal 提供了 proceed 却发不出去 → 驱动死循环。
+        boolean eventDone = Screens.EVENT.equals(scr)
+                && AbstractDungeon.getCurrRoom() != null
+                && AbstractDungeon.getCurrRoom().phase
+                    == com.megacrit.cardcrawl.rooms.AbstractRoom.RoomPhase.COMPLETE
+                && AbstractDungeon.getCurrRoom().monsters != null
+                && AbstractDungeon.getCurrRoom().monsters.areMonstersBasicallyDead()
+                && Obs.eventButtons().isEmpty();
         if (!Screens.COMPLETE.equals(scr) && !Screens.GAME_OVER.equals(scr)
-                && !Screens.SHOP_ROOM.equals(scr) && !Screens.CHEST.equals(scr)) {
+                && !Screens.SHOP_ROOM.equals(scr) && !Screens.CHEST.equals(scr)
+                && !eventDone) {
             throw new InvalidActionException("proceed not legal on screen: " + scr);
         }
         if (Screens.CHEST.equals(scr) && Legal.ObsScreen.chestOpened()) {

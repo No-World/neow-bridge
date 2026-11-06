@@ -94,8 +94,10 @@ public final class Server {
                 long timeoutMs = Bridge.CFG.timeoutMs + 5_000;
                 // ping 在忙时代答（服务器线程），保证卡死时也有透视
                 String cmd0 = Actions.str(request, "cmd");
-                // diag：线程栈转储，服务器线程直接代答（游戏线程卡死时也能用）
-                if ("diag".equals(cmd0)) {
+                // diag_thread：线程栈转储，服务器线程直接代答（游戏线程卡死时也能用）
+                // ⚠️ 命令名必须是 diag_thread —— 原来的 "diag" 会在这里被拦下，
+                //    导致 Commands.respond 里新增的房间/事件诊断分支永远走不到。
+                if ("diag_thread".equals(cmd0)) {
                     JsonObject resp = new JsonObject();
                     resp.addProperty("id", request.has("id") ? request.get("id").getAsInt() : 0);
                     resp.addProperty("ok", true);

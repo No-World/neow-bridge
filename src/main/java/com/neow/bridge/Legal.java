@@ -225,6 +225,19 @@ public final class Legal {
                     }
                     i++;
                 }
+                // ⚠️ 事件内精英战已打完（Dead Adventurer / Mushrooms / Colosseum 等）：
+                //    phase 变 COMPLETE、monsters 已清、两个 dialog 都空、waitForInput=true，
+                //    此时真游戏只有「继续」按钮（overlayMenu.proceedButton）→ 必须提供 proceed，
+                //    否则 legal_actions 为空、驱动死循环（实测 A10 floor11 3 Sentries）。
+                if (out.size() == 0
+                        && com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom() != null
+                        && com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom().phase
+                            == com.megacrit.cardcrawl.rooms.AbstractRoom.RoomPhase.COMPLETE
+                        && com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom().monsters != null
+                        && com.megacrit.cardcrawl.dungeons.AbstractDungeon.getCurrRoom()
+                            .monsters.areMonstersBasicallyDead()) {
+                    out.add(act("proceed"));
+                }
                 if (ObsScreen.noDialogButtons()) {
                     // GremlinMatch: 每张未翻开的卡一个选项；GremlinWheel: spin
                     if (Screens.GREMLIN_MATCH.equals(scr) && com.neow.bridge.patch.HoverPatches.GremlinMatch.cards != null) {

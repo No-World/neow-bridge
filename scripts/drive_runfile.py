@@ -45,6 +45,7 @@ PURCHASE_FLOORS = {int(f): None for f in (RUNFILE.get("item_purchase_floors") or
 ITEMS_PURCHASED = RUNFILE.get("items_purchased") or []
 POTION_USAGE = {int(f) for f in (RUNFILE.get("potions_floor_usage") or [])}
 
+
 _s = None
 _f = None
 _id = [0]
@@ -369,6 +370,10 @@ def pick(res, floor):
         return relics[0]
 
     if t == "event":
+        # 事件内精英战打完后（Dead Adventurer / Mushrooms / Colosseum 等），
+        # bridge 只提供 proceed（事件屏但战斗已结束）
+        if by("proceed") and not by("event"):
+            return by("proceed")[0]
         ev = by("event")
         if not ev:
             return None
@@ -392,15 +397,34 @@ def pick(res, floor):
                         return a
             return neow_pick(scr, RUNFILE.get("neow_bonus"))
         want = EVENT_CHOICES.get(floor)
+        opts = scr.get("options") or []
         if want:
             choice = (want.get("player_choice") or "").strip()
+            # ⚠️ 同一事件会有多步决策（Golden Idol 的 Take → 三选一；Dead Adventurer
+            #    的 Search → Continue → Leave）。存档只记「最终选择」，故：
+            #    第 1 步按存档选，之后各步只做「收尾」（唯一可选项，通常是 Leave）。
+            seen = getattr(pick, "_ev_seen", None)
+            if seen is None:
+                pick._ev_seen = seen = {}
+            if seen.get(floor):
+                if len(ev) == 1:
+                    return ev[0]
+                for a in ev:
+                    oi = a.get("option_index", 0)
+                    if 0 <= oi < len(opts):
+                        txt = (opts[oi].get("label") or "").lower()
+                        if "leave" in txt or "continue" in txt:
+                            return a
+                return ev[0]
+            seen[floor] = True
             opts = scr.get("options") or []
             # ① 先按 player_choice 文本匹配（大小写/子串）
             if choice:
                 for a in ev:
                     oi = a.get("option_index", 0)
                     if 0 <= oi < len(opts):
-                        txt = (opts[oi].get("label") or opts[oi].get("text") or "")
+                        txt = ((opts[oi].get("label") or "") + " "
+                               + (opts[oi].get("text") or ""))
                         if choice.lower() in txt.lower() or txt.lower() in choice.lower():
                             return a
             # ①' Dead Adventurer 特例：存档的 "Searched 'N' times" 表示搜索 N 次
