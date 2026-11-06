@@ -153,6 +153,14 @@ public final class Commands {
             result.addProperty("monsters",
                     room == null || room.monsters == null ? -1 : room.monsters.monsters.size());
             result.addProperty("elite_trigger", room != null && room.eliteTrigger);
+        } else if ("record_start".equals(cmd)) {
+            String file = Actions.str(request, "file");
+            if (file == null || file.isEmpty()) {
+                file = "runtime/record.jsonl";
+            }
+            result = Recorder.start(file);
+        } else if ("record_stop".equals(cmd)) {
+            result = Recorder.stop();
         } else if ("kill_game".equals(cmd) || "config".equals(cmd)) {
             result.addProperty("done", true);
         } else {
@@ -230,6 +238,10 @@ public final class Commands {
                 return killGame();
             case "diag":
                 return null; // 诊断：直接由 Bridge 返回 detail（见 Server）
+            case "record_start":
+                return null; // 由 respond 直接处理
+            case "record_stop":
+                return null;
             case "config":
                 return config(request);
             default:

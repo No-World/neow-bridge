@@ -139,6 +139,18 @@ public final class Screens {
     }
 
     /** 事件对话框是否为图片型（GenericEventDialog）而非房间型。 */
+    /** 供 Recorder 复用的 info 片段（screen/act/floor）。 */
+    public static com.google.gson.JsonObject info() {
+        com.google.gson.JsonObject info = new com.google.gson.JsonObject();
+        info.addProperty("screen", current());
+        info.addProperty("in_dungeon", inDungeon());
+        if (inDungeon()) {
+            info.addProperty("act", com.megacrit.cardcrawl.dungeons.AbstractDungeon.actNum);
+            info.addProperty("floor", com.megacrit.cardcrawl.dungeons.AbstractDungeon.floorNum);
+        }
+        return info;
+    }
+
     public static boolean imageEventDialogShown() {
         return (Boolean) ReflectionHacks.getPrivateStatic(
                 com.megacrit.cardcrawl.events.GenericEventDialog.class, "show");

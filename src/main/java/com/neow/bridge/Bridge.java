@@ -175,6 +175,12 @@ public final class Bridge {
 
     /** PostUpdate：落定检查与响应构建。绝不让异常漏进渲染循环。 */
     public static void onPostUpdate() {
+        // 录制器：每帧检查状态变化（与 step 状态机无关，独立开关）
+        try {
+            Recorder.frame();
+        } catch (Throwable t) {
+            logger.error("recorder frame failed", t);
+        }
         Pending p = PENDING.get();
         if (p == null || state != State.SETTLING) {
             return;

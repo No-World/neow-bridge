@@ -651,6 +651,49 @@ public final class Obs {
     // 顶层 observation
     // ------------------------------------------------------------------
 
+    /**
+     * 录制用快照：与 neow-sim/tools/parity_replay.py 期望的字段对齐。
+     * 复用 observation() 的输出，只做字段重命名/裁剪。
+     */
+    public static JsonObject snapshotForTrace(JsonObject obs, JsonObject info) {
+        JsonObject o = new JsonObject();
+        o.addProperty("screen", info.has("screen") ? info.get("screen").getAsString() : null);
+        if (info.has("act")) o.addProperty("act", info.get("act").getAsInt());
+        if (info.has("floor")) o.addProperty("floor", info.get("floor").getAsInt());
+        JsonObject meta = obs.has("meta") ? obs.getAsJsonObject("meta") : new JsonObject();
+        o.add("meta", meta);
+        if (meta.has("turn")) o.add("turn", meta.get("turn"));
+        o.add("player", obs.has("player") ? obs.get("player") : new JsonObject());
+        o.add("hand", obs.has("hand") ? obs.get("hand") : new JsonArray());
+        o.add("monsters", obs.has("monsters") ? obs.get("monsters") : new JsonArray());
+        JsonObject dp = obs.has("draw_pile") ? obs.getAsJsonObject("draw_pile") : new JsonObject();
+        o.addProperty("draw_pile_n", dp.has("count") ? dp.get("count").getAsInt() : 0);
+        if (dp.has("cards") && !dp.get("cards").isJsonNull()) {
+            JsonArray ids = new JsonArray();
+            for (com.google.gson.JsonElement e : dp.getAsJsonArray("cards")) {
+                ids.add(e.getAsJsonObject().get("id"));
+            }
+            o.add("draw_order", ids);
+        }
+        JsonObject di = obs.has("discard_pile") ? obs.getAsJsonObject("discard_pile") : new JsonObject();
+        o.addProperty("discard_pile_n", di.has("count") ? di.get("count").getAsInt() : 0);
+        JsonObject ex = obs.has("exhaust_pile") ? obs.getAsJsonObject("exhaust_pile") : new JsonObject();
+        o.addProperty("exhaust_pile_n", ex.has("count") ? ex.get("count").getAsInt() : 0);
+        JsonObject md = obs.has("master_deck") ? obs.getAsJsonObject("master_deck") : new JsonObject();
+        o.add("deck", md.has("cards") ? md.get("cards") : new JsonArray());
+        JsonObject scr = obs.has("screen") ? obs.getAsJsonObject("screen") : new JsonObject();
+        if (scr.has("type") && "event".equals(scr.get("type").getAsString())) {
+            JsonObject pay = new JsonObject();
+            pay.addProperty("type", "event");
+            if (scr.has("id")) pay.add("id", scr.get("id"));
+            pay.add("options", scr.has("options") ? scr.get("options") : new JsonArray());
+            o.add("screen_payload", pay);
+        }
+        o.add("relics", obs.has("relics") ? obs.get("relics") : new JsonArray());
+        o.add("rng", obs.has("rng") ? obs.get("rng") : new JsonObject());
+        return o;
+    }
+
     public static JsonObject observation(Bridge.Config cfg) {
         JsonObject o = new JsonObject();
         boolean inDungeon = Screens.inDungeon();

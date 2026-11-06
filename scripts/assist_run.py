@@ -678,6 +678,7 @@ def main():
     sess = Session(plan, rf)
     n, last_hash, t0 = 0, None, time.time()
     monitor = ContinuityMonitor()
+    sl_marks = []
     in_combat = False
 
     print("\n开局成功。战斗屏请你操作；其它屏我会自动推进。", flush=True)
@@ -704,12 +705,22 @@ def main():
             # （floor 变小、turn 变小、hp 无故回满、同一 turn 的怪物血量回升），
             # 说明发生了 S/L → **整段录制作废**，不能当作 golden trace。
             if not monitor.check(floor, turn, obs, info):
-                print("\n  ✗✗ 检测到 S/L（回退）——录制作废：%s" % monitor.reason, flush=True)
-                fh.close()
-                bad = out + ".SL_VIOLATION"
-                os.rename(out, bad)
-                print("  已改名为 %s（不要用于对拍）" % bad, flush=True)
-                return 2
+                # ⚠️ S/L 检测**只做标记，不作废录制**：
+                #   录制的价值在于「连续完整地记录发生了什么」，一旦因为 S/L 就丢
+                #   掉整段，反而丧失了记录连续性。所以这里：
+                #     ① 在 trace 里插入一条 {"type":"sl_marker"} 标注该处回退
+                #     ② 打印警告，继续录
+                #     ③ 对拍时（manual_to_trace）把这些区间标为「非正常对局」，
+                #        不参与严格逐点比对（但保留在文件里，供事后分析）
+                n += 1
+                fh.write(json.dumps({"i": n, "t": round(time.time() - t0, 1),
+                                     "type": "sl_marker",
+                                     "reason": monitor.reason,
+                                     "state": snapshot(obs, info)},
+                                    ensure_ascii=False) + "\n")
+                fh.flush()
+                sl_marks.append({"i": n, "reason": monitor.reason, "t": round(time.time() - t0, 1)})
+                print("  ⚠ S/L 标记 #%d: %s（继续录制）" % (n, monitor.reason), flush=True)
             sess.enter_floor(floor)
 
             # 录制：状态变化就记
@@ -768,6 +779,10 @@ def main():
         fh.close()
 
     print(f"\n=== 录制 {n} 步 -> {out} ===")
+    if sl_marks:
+        print(f"⚠ 期间检测到 {len(sl_marks)} 处 S/L（已标记，未丢记录）：")
+        for m in sl_marks[:10]:
+            print("  - #%d %s" % (m["i"], m["reason"]))
     if sess.warnings:
         print(f"计划与实际不符 {len(sess.warnings)} 处：")
         for w in sess.warnings[:12]:
