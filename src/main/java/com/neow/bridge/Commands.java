@@ -97,6 +97,16 @@ public final class Commands {
                         com.megacrit.cardcrawl.events.RoomEventDialog.optionList.size());
                 result.addProperty("wait_for_input",
                         com.megacrit.cardcrawl.events.RoomEventDialog.waitForInput);
+                result.addProperty("selected_option",
+                        com.megacrit.cardcrawl.events.RoomEventDialog.selectedOption);
+                try {
+                    java.lang.reflect.Field sf = room.event.getClass().getSuperclass()
+                            .getDeclaredField("screen");
+                    sf.setAccessible(true);
+                    result.addProperty("event_cur_screen", String.valueOf(sf.get(room.event)));
+                } catch (Throwable t) {
+                    result.addProperty("event_cur_screen", "?");
+                }
                 result.addProperty("wait_timer", room.event.waitTimer);
                 StringBuilder sb = new StringBuilder();
                 for (com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton b

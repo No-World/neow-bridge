@@ -610,15 +610,21 @@ public final class Obs {
             return com.megacrit.cardcrawl.events.RoomEventDialog.optionList;
         }
         ArrayList<LargeDialogOptionButton> img = event.imageEventText.optionList;
-        if (img != null && !img.isEmpty()) {
-            return img;
-        }
         ArrayList<LargeDialogOptionButton> room =
                 com.megacrit.cardcrawl.events.RoomEventDialog.optionList;
+        // 优先按「当前显示的是哪个 dialog」取（show 标志是权威）：
+        //   show=true → imageEventText（ImageEvent 系）
+        //   show=false → roomEventText（AbstractEvent 系，如 Golden Idol / Dead Adventurer）
+        // ⚠️ 不能「取非空的那个」：ImageEvent 的 optionList 会残留上一次内容，
+        //    两个都非空时会取错 → 点到的按钮不属于当前事件（实测 Golden Idol 的
+        //    Take 点了没反应，事件停在原屏）。
+        if (Screens.imageEventDialogShown()) {
+            return img != null ? img : room;
+        }
         if (room != null && !room.isEmpty()) {
             return room;
         }
-        return Screens.imageEventDialogShown() ? img : room;
+        return img != null ? img : room;
     }
 
     static String eventId(AbstractEvent event) {
