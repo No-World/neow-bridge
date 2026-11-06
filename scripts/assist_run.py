@@ -46,6 +46,7 @@ EVENT_SCRIPTS = {
     ("Big Fish", "Box"): [("pick_box", ["box"])],
     ("Big Fish", "Banana"): [("pick_banana", ["banana"])],
     ("Big Fish", "Donut"): [("pick_donut", ["donut"])],
+    # Shining Light 的 Enter 随机升 2 张（无选择屏）；引擎侧靠 miscRng.randomLong 洗牌
     ("Shining Light", "Entered Light"): [("enter", ["enter"])],
     ("Shining Light", "Ignored Light"): [("leave", ["leave"])],
     ("Golden Idol", "Take Damage"): [("take", ["take"]), ("smash", ["smash", "damage"])],
@@ -66,6 +67,14 @@ EVENT_SCRIPTS = {
     ("Accursed Blacksmith", "Forge"): [("forge", ["forge"])],
     ("Accursed Blacksmith", "Rummage"): [("rummage", ["rummage"])],
 }
+
+# 这些事件意图执行后会立即打开 grid_select 屏
+# 这些事件意图执行后会立即打开 grid_select 屏。
+# ⚠️ 不含 "enter"：Shining Light 的 Enter **不开选牌屏** ——
+#    源码 `upgradeCards()` 用 `Collections.shuffle(upgradableCards,
+#    new Random(miscRng.randomLong()))` 随机洗牌后**自动升前 2 张**。
+GRID_OPENING_INTENTS = {"give_card", "forge", "rummage", "duplicate",
+                        "remove", "transform", "upgrade", "pray", "match"}
 
 GENERIC_KEYWORDS = {
     "take": ["take", "grab", "obtain"],
@@ -137,6 +146,8 @@ class Session:
         self.boss_i = 0
         self.warnings = []
         self.forks = []
+        self.expect_grid = False
+        self.grid_wait = 0
         self.retry = 0
 
     def enter_floor(self, floor):
@@ -146,6 +157,7 @@ class Session:
             self.entered_shop = False
             self.pending_grid_target = None
             self.retry = 0
+            self.expect_grid = False
 
     def peek(self, kind):
         for k, s in enumerate(self.steps):
@@ -351,6 +363,9 @@ def decide(sess, res):
             if a:
                 sess.take(k)
                 sess.retry = 0
+                # 这些意图会立刻打开选牌屏（grid_select），需等待而非兜底 Leave
+                if step["intent"] in GRID_OPENING_INTENTS:
+                    sess.expect_grid = True
                 return a, "event:" + step["intent"]
             sess.retry += 1
             if sess.retry <= 6:
@@ -368,6 +383,19 @@ def decide(sess, res):
                         sess.take(k)
                         return a, "event:" + intent
             sess.take(k)
+        # ⚠️ 有些选项会**立即打开** grid_select（Shining Light 的 Enter →
+        #    upgradeCards()、WeMeetAgain 的 Give Card 等）。此时若还没进 grid 屏，
+        #    绝不能兜底选 Leave —— 那会跳过整个选牌步骤（实测 F3 牌组少 2 张升级）。
+        if sess.expect_grid:
+            sess.grid_wait += 1
+            if sess.grid_wait <= 30:
+                return None, "event:wait-grid"
+            # 等太久：可能该事件根本不开选牌屏 → 清标志并继续
+            sess.fork("F%d 事件 %s 预期开选牌屏但未出现（等了 %d 帧）"
+                      % (sess.floor, evid, sess.grid_wait))
+            sess.expect_grid = False
+            sess.grid_wait = 0
+
         for a in ev:
             oi = a.get("option_index", 0)
             if 0 <= oi < len(texts) and ("leave" in texts[oi] or "continue" in texts[oi]):
@@ -375,9 +403,50 @@ def decide(sess, res):
         return ev[0], "event:first"
 
     if t == "combat_reward":
+        items = scr.get("items") or []
+        # ⚠️ 必须**逐项**领取：若把「卡牌奖励」一并 take，游戏会自动随机选一张
+        #    （实测 F1：存档要 Reckless Charge，被自动选成 Sever Soul）。
+        #    正确做法：先取金币/遗物/药水，最后单独留卡牌项 → 进 card_reward 屏。
         takes = [a for a in legal if a["type"] == "reward" and a.get("take_indices")]
-        return ((takes[0], "reward:take") if takes
-                else ({"type": "reward", "skip": True}, "reward:skip"))
+
+        # ⚠️ 卡牌奖励的正确动作是**带 card_pick 的那条**（见 bridge legal_actions）：
+        #    带 card_pick 表示「取这张卡」；不带 card_pick 的 take_indices 会让
+        #    游戏随机选（实测 F1 把 Reckless Charge 随机成 Sever Soul）。
+        #    所以优先取金币/遗物/药水，最后用 card_pick 精确选卡。
+        k2, step = sess.peek("card_reward")
+        want = step.get("pick") if step else None
+        for a in takes:
+            idxs = a.get("take_indices") or []
+            is_card = any(0 <= i < len(items)
+                          and (items[i].get("type") or "").upper() == "CARD"
+                          for i in idxs)
+            if is_card:
+                continue
+            return a, "reward:take-noncard"
+
+        # 有卡牌项：用 card_pick 精确选；找不到想要的卡就进屏后再决定
+        card_takes = [a for a in takes if a.get("card_pick") is not None]
+        if card_takes and want is not None:
+            for a in card_takes:
+                idxs = a.get("take_indices") or []
+                cards = []
+                for i in idxs:
+                    if 0 <= i < len(items):
+                        cards = items[i].get("cards") or []
+                cp = a["card_pick"]
+                if 0 <= cp < len(cards):
+                    cid = (cards[cp].get("id") or "").split("+")[0]
+                    if cid == want:
+                        sess.take(k2)
+                        return a, "reward:card-" + want
+        if card_takes and want is None:
+            sess.take(k2)
+            return {"type": "reward", "skip": True}, "reward:skip-card"
+        if takes:
+            return takes[0], "reward:take"
+        if by("proceed"):
+            return by("proceed")[0], "reward:proceed"
+        return {"type": "reward", "skip": True}, "reward:skip"
 
     if t == "shop_room":
         if not sess.entered_shop:
@@ -438,6 +507,8 @@ def decide(sess, res):
         return {"type": "chest_open"}, "chest"
 
     if t == "grid_select":
+        sess.expect_grid = False
+        sess.grid_wait = 0
         if scr.get("confirm_up"):
             return {"type": "grid_select", "indices": []}, "grid:confirm"
         cards = scr.get("cards") or []
