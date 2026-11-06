@@ -136,6 +136,7 @@ class Session:
         self.pending_grid_target = None
         self.boss_i = 0
         self.warnings = []
+        self.forks = []
         self.retry = 0
 
     def enter_floor(self, floor):
@@ -154,6 +155,11 @@ class Session:
 
     def take(self, k):
         return self.steps.pop(k)
+
+    def fork(self, msg):
+        """分叉：存档决策链与当前实际不符。不是错误，是预期现象（换局必然分叉）。"""
+        self.forks.append(msg)
+        print("  [FORK] " + msg, flush=True)
 
     def warn(self, msg):
         self.warnings.append(msg)
@@ -327,7 +333,19 @@ def decide(sess, res):
         if not ev:
             return None, "event-empty"
         texts = option_texts(scr)
+        evid = scr.get("id") or ""
         k, step = sess.peek("event")
+
+        # ⚠️ 关键设计：`*.run` 的决策链只对**存档那一局**成立。
+        #    换种子/换决策后事件抽取必然不同（实测 F7：存档 MatchAndKeep，
+        #    实际 WeMeetAgain）。此时不能硬按旧链走，否则整局失真。
+        #    → 事件 id 与计划不符 ⇒ 判为 FORK：丢弃该层计划，按当前选项自己决策。
+        if step and step.get("event") and evid and step["event"] != evid:
+            sess.fork("F%d 事件 %s → 实际 %s" % (sess.floor, step["event"], evid))
+            while sess.steps and sess.steps[0].get("event"):
+                sess.steps.pop(0)
+            step, k = None, None
+
         if step and step.get("match"):
             a = find_option(ev, texts, step["match"])
             if a:
@@ -337,7 +355,7 @@ def decide(sess, res):
             sess.retry += 1
             if sess.retry <= 6:
                 return None, "event:wait-refresh"
-            sess.warn("F%d 事件 %s 找不到按钮 %s（实际 %s）" % (
+            sess.fork("F%d 事件 %s 找不到按钮 %s（实际 %s）" % (
                 sess.floor, step.get("event"), step["match"], [x[:20] for x in texts]))
             sess.retry = 0
             sess.take(k)
@@ -430,12 +448,17 @@ def decide(sess, res):
                 if (c.get("id") or "").split("+")[0] == base:
                     sess.pending_grid_target = None
                     return {"type": "grid_select", "indices": [idx]}, "grid:" + base
-            sess.warn("F%d 营火升级目标 %s 不在候选 %s" % (
-                sess.floor, tgt, [c.get("id") for c in cards]))
+            sess.fork("F%d 营火升级目标 %s 不在候选（牌组已分叉）" % (sess.floor, tgt))
             sess.pending_grid_target = None
+        # 兜底：按价值选（**绝不**默认选打击/防御——那会让整局牌组走向失真）
+        idx, why = pick_upgrade_target(cards, exclude_basic=False)
         n = scr.get("num", 1)
         n = 1 if n in (-1, 0) else n
-        return {"type": "grid_select", "indices": list(range(min(n, 2)))}, "grid:first"
+        n = max(1, min(n, 2))
+        if idx is None:
+            return {"type": "grid_select", "indices": list(range(n))}, "grid:none"
+        picks = [idx] + [i for i in range(len(cards)) if i != idx][:n - 1]
+        return {"type": "grid_select", "indices": picks}, "grid:value-" + str(why)
 
     if t == "hand_select":
         n = scr.get("num_to_select", 1)
@@ -543,6 +566,40 @@ def snapshot(obs, info):
         "rng": {k: (v.get("counter") if isinstance(v, dict) else v)
                 for k, v in (obs.get("rng") or {}).items()},
     }
+
+
+UPGRADE_PRIORITY = {
+    "Barricade": 200, "Corruption": 190, "Feel No Pain": 180, "Demon Form": 175,
+    "Dark Embrace": 170, "Evolve": 165, "Fiend Fire": 160, "Impervious": 155,
+    "Bludgeon": 150, "Reaper": 145, "Feed": 140, "Offering": 135,
+    "Whirlwind": 130, "Heavy Blade": 125, "Uppercut": 120, "Carnage": 115,
+    "Immolate": 110, "Shockwave": 105, "Bash": 100, "Inflame": 95,
+    "Metallicize": 90, "Pommel Strike": 85, "Twin Strike": 80,
+    "Sever Soul": 75, "Clothesline": 70, "Rampage": 65, "Headbutt": 60,
+    "Dropkick": 55, "Perfected Strike": 50,
+}
+# 基础牌：除非别无选择，绝不作为升级目标
+BASIC_CARDS = {"Strike_R", "Strike_G", "Strike_B", "Defend_R", "Defend_G",
+               "Defend_B", "Zap", "Dualcast", "Bash"}
+
+
+def pick_upgrade_target(cards, exclude_basic=True):
+    """选升级目标：优先计划牌 → 高价值牌 → 排除基础牌。
+
+    返回 (index, reason)。**绝不**在还有非基础牌时选打击/防御。
+    """
+    def cid(c):
+        return (c.get("id") or "").split("+")[0]
+
+    cands = [(i, c) for i, c in enumerate(cards)
+             if not (exclude_basic and cid(c) in BASIC_CARDS and len(cards) > 1)]
+    if not cands:
+        cands = list(enumerate(cards))
+    if not cands:
+        return None, "no-cards"
+    best = max(cands, key=lambda t: (UPGRADE_PRIORITY.get(cid(t[1]), 1),
+                                     -t[0]))
+    return best[0], cid(best[1])
 
 
 def legal_list(res):
@@ -849,8 +906,12 @@ def main():
         print(f"⚠ 期间检测到 {len(sl_marks)} 处 S/L（已标记，未丢记录）：")
         for m in sl_marks[:10]:
             print("  - #%d %s" % (m["i"], m["reason"]))
+    if getattr(sess, "forks", None):
+        print(f"\n分叉 {len(sess.forks)} 处（存档决策链与新一局不同，属正常）：")
+        for f in sess.forks[:12]:
+            print("  - " + f)
     if sess.warnings:
-        print(f"计划与实际不符 {len(sess.warnings)} 处：")
+        print(f"\n计划与实际不符 {len(sess.warnings)} 处：")
         for w in sess.warnings[:12]:
             print("  - " + w)
     print(f"\n下一步：python3 scripts/manual_to_trace.py {out}")

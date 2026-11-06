@@ -683,9 +683,15 @@ def decide(sess, res):
                 for idx, c in enumerate(cards):
                     if (c.get("id") or "").split("+")[0] == base:
                         return {"type": "grid_select", "indices": [idx]}, "grid:" + base
+        # 兜底：按价值选（**绝不**默认选打击/防御——那会让整局牌组走向失真）
+        idx, why = pick_upgrade_target(cards, exclude_basic=False)
         n = scr.get("num", 1)
         n = 1 if n in (-1, 0) else n
-        return {"type": "grid_select", "indices": list(range(min(n, 2)))}, "grid:first"
+        n = max(1, min(n, 2))
+        if idx is None:
+            return {"type": "grid_select", "indices": list(range(n))}, "grid:none"
+        picks = [idx] + [i for i in range(len(cards)) if i != idx][:n - 1]
+        return {"type": "grid_select", "indices": picks}, "grid:value-" + str(why)
     if t == "hand_select":
         n = scr.get("num_to_select", 1)
         n = 1 if n in (-1, 0) else n
@@ -693,6 +699,40 @@ def decide(sess, res):
     if t in ("complete", "game_over"):
         return {"type": "proceed"}, "proceed"
     return (legal[0], "first-legal") if legal else (None, "no-legal")
+
+
+UPGRADE_PRIORITY = {
+    "Barricade": 200, "Corruption": 190, "Feel No Pain": 180, "Demon Form": 175,
+    "Dark Embrace": 170, "Evolve": 165, "Fiend Fire": 160, "Impervious": 155,
+    "Bludgeon": 150, "Reaper": 145, "Feed": 140, "Offering": 135,
+    "Whirlwind": 130, "Heavy Blade": 125, "Uppercut": 120, "Carnage": 115,
+    "Immolate": 110, "Shockwave": 105, "Bash": 100, "Inflame": 95,
+    "Metallicize": 90, "Pommel Strike": 85, "Twin Strike": 80,
+    "Sever Soul": 75, "Clothesline": 70, "Rampage": 65, "Headbutt": 60,
+    "Dropkick": 55, "Perfected Strike": 50,
+}
+# 基础牌：除非别无选择，绝不作为升级目标
+BASIC_CARDS = {"Strike_R", "Strike_G", "Strike_B", "Defend_R", "Defend_G",
+               "Defend_B", "Zap", "Dualcast", "Bash"}
+
+
+def pick_upgrade_target(cards, exclude_basic=True):
+    """选升级目标：优先计划牌 → 高价值牌 → 排除基础牌。
+
+    返回 (index, reason)。**绝不**在还有非基础牌时选打击/防御。
+    """
+    def cid(c):
+        return (c.get("id") or "").split("+")[0]
+
+    cands = [(i, c) for i, c in enumerate(cards)
+             if not (exclude_basic and cid(c) in BASIC_CARDS and len(cards) > 1)]
+    if not cands:
+        cands = list(enumerate(cards))
+    if not cands:
+        return None, "no-cards"
+    best = max(cands, key=lambda t: (UPGRADE_PRIORITY.get(cid(t[1]), 1),
+                                     -t[0]))
+    return best[0], cid(best[1])
 
 
 def _card_score(c):

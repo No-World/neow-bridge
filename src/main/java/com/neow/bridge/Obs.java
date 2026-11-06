@@ -682,11 +682,72 @@ public final class Obs {
         JsonObject md = obs.has("master_deck") ? obs.getAsJsonObject("master_deck") : new JsonObject();
         o.add("deck", md.has("cards") ? md.get("cards") : new JsonArray());
         JsonObject scr = obs.has("screen") ? obs.getAsJsonObject("screen") : new JsonObject();
-        if (scr.has("type") && "event".equals(scr.get("type").getAsString())) {
-            JsonObject pay = new JsonObject();
-            pay.addProperty("type", "event");
-            if (scr.has("id")) pay.add("id", scr.get("id"));
-            pay.add("options", scr.has("options") ? scr.get("options") : new JsonArray());
+        String scrType = scr.has("type") && !scr.get("type").isJsonNull()
+                ? scr.get("type").getAsString() : "";
+        JsonObject pay = new JsonObject();
+        switch (scrType) {
+            case "event": {
+                pay.addProperty("type", "event");
+                if (scr.has("id")) pay.add("id", scr.get("id"));
+                pay.add("options", scr.has("options") ? scr.get("options") : new JsonArray());
+                break;
+            }
+            case "card_reward": {
+                pay.addProperty("type", "card_reward");
+                JsonArray ids = new JsonArray();
+                if (scr.has("cards")) {
+                    for (com.google.gson.JsonElement e : scr.getAsJsonArray("cards")) {
+                        if (e.isJsonObject() && e.getAsJsonObject().has("id")) {
+                            ids.add(e.getAsJsonObject().get("id"));
+                        } else {
+                            ids.add(e);
+                        }
+                    }
+                }
+                pay.add("cards", ids);
+                break;
+            }
+            case "combat_reward": {
+                pay.addProperty("type", "combat_reward");
+                pay.add("items", scr.has("items") ? scr.get("items") : new JsonArray());
+                break;
+            }
+            case "rest": {
+                pay.addProperty("type", "rest");
+                pay.add("options", scr.has("options") ? scr.get("options") : new JsonArray());
+                break;
+            }
+            case "grid_select": {
+                pay.addProperty("type", "grid_select");
+                pay.add("cards", scr.has("cards") ? scr.get("cards") : new JsonArray());
+                if (scr.has("num")) pay.add("num", scr.get("num"));
+                if (scr.has("confirm_up")) pay.add("confirm_up", scr.get("confirm_up"));
+                break;
+            }
+            case "shop_room":
+            case "shop": {
+                pay.addProperty("type", scrType);
+                pay.add("cards", scr.has("cards") ? scr.get("cards") : new JsonArray());
+                pay.add("relics", scr.has("relics") ? scr.get("relics") : new JsonArray());
+                pay.add("potions", scr.has("potions") ? scr.get("potions") : new JsonArray());
+                break;
+            }
+            case "boss_relic": {
+                pay.addProperty("type", "boss_relic");
+                pay.add("relics", scr.has("relics") ? scr.get("relics") : new JsonArray());
+                break;
+            }
+            case "map": {
+                pay.addProperty("type", "map");
+                break;
+            }
+            default:
+                if (!scrType.isEmpty()) {
+                    pay.addProperty("type", scrType);
+                break;
+                }
+        }
+        if (!pay.isJsonNull() && pay.has("type")) {
             o.add("screen_payload", pay);
         }
         o.add("relics", obs.has("relics") ? obs.get("relics") : new JsonArray());
